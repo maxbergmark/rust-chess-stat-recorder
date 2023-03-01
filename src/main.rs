@@ -228,6 +228,8 @@ fn main() {
 
 
         crossbeam::scope(|scope| {
+
+            let filename = arg.clone();
             scope.spawn(move |_| {
                 let mut num_games = 0;
                 for game in BufferedReader::new(uncompressed).into_iter(&mut validator) {
@@ -272,7 +274,7 @@ fn main() {
                 let p = v.as_ptr().cast();
                 let l = v.len() * mem::size_of::<GameData>();
                 let d = unsafe { slice::from_raw_parts(p, l) };
-                std::fs::write("../resources/data.bin", d).unwrap();
+                std::fs::write(filename.replace(".pgn.zst", ".bin"), d).unwrap();
             });
 
         }).unwrap();
@@ -284,7 +286,7 @@ fn main() {
         let speed = num_games as f64 / elapsed.as_secs_f64();
         println!("Elapsed: {:.2?}\nSpeed: {:.2} games/second\nGames: {}", elapsed, speed, num_games);
         let success = success.load(Ordering::SeqCst);
-        println!("{}: {}", arg, if success { "success" } else { "errors" });
+        println!("{}: {}", &arg, if success { "success" } else { "errors" });
         complete_success &= success;
     }
 
