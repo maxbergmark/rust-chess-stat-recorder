@@ -75,7 +75,7 @@ def get_time_control_stats(arr):
     for k, v in zip(key, value):
         print(TimeControl(k), v)
 
-arr = np.fromfile("resources/lichess_db_standard_rated_2023-01.bin", dtype=game_player_data)
+arr = np.fromfile("resources/lichess_db_standard_rated_2013-01.bin", dtype=game_player_data)
 # arr["white_player_data"]["elo"] //= 10
 # arr["white_player_data"]["elo"] *= 10
 
@@ -101,7 +101,7 @@ checks = [
 get_time_control_stats(arr)
 
 fig, axes = plt.subplots(len(checks), len(time_controls))
-fig.suptitle(f"Chess stats for January 2023 ({len(arr)} games)")
+fig.suptitle(f"Chess stats for January 2013 ({len(arr)} games)")
 for check, ax_row in zip(checks, axes):
     for time_control, ax in zip(time_controls, ax_row):
         x, y, s, num_games, title = check(all_player_data, time_controls_np, time_control)

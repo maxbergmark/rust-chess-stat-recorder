@@ -15,7 +15,7 @@ use std::time::Instant;
 use pgn_reader::{BufferedReader, RawHeader, San, SanPlus, Skip, Visitor};
 use shakmaty::{Chess, Position, Move};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
 struct GamePlayerData {
     elo: i16,
@@ -85,14 +85,14 @@ impl GamePlayerData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C)]
 struct GameData {
     white_player: GamePlayerData,
     black_player: GamePlayerData,
     time_control: u8,
-    result: u8, // TODO: implement
-    termination: u8, // TODO: implement
+    result: u8,
+    termination: u8,
 }
 
 impl GameData {
@@ -105,6 +105,30 @@ impl GameData {
             termination: 0,
         }
     }
+
+    fn parse_result(&mut self, value: &[u8]) {
+        let s = std::str::from_utf8(value).unwrap();
+        self.result = match s {
+            "1-0" => 1,
+            "1/2-1/2" => 2,
+            "0-1" => 3,
+            "*" => 4,
+            _ => unimplemented!("Result: {}", s)
+        }
+    }
+
+    fn parse_termination(&mut self, value: &[u8]) {
+        let s = std::str::from_utf8(value).unwrap();
+        self.termination = match s {
+            "Normal" => 1,
+            "Time forfeit" => 2,
+            "Abandoned" => 3,
+            "Unterminated" => 4,
+            "Rules infraction" => 5,
+            _ => unimplemented!("Termination: {}", s)
+        }
+    }
+
 
     fn parse_time_control(&mut self, value: &[u8]) {
         let s = std::str::from_utf8(value).unwrap();
@@ -137,7 +161,7 @@ impl GameData {
 }
 
 struct Game {
-    index: usize,
+    index: i64,
     pos: Chess,
     sans: Vec<San>,
     success: bool,
@@ -175,7 +199,7 @@ impl Game {
 }
 
 struct Validator {
-    games: usize,
+    games: i64,
     move_counter: HashMap<SanPlus, u64>,
     game: Game,
 }
@@ -226,6 +250,8 @@ impl Visitor for Validator {
             b"WhiteElo" => self.game.game_data.white_player.set_elo(&value.as_bytes()),
             b"BlackElo" => self.game.game_data.black_player.set_elo(&value.as_bytes()),
             b"Event" => self.game.game_data.parse_time_control(&value.as_bytes()),
+            b"Result" => self.game.game_data.parse_result(&value.as_bytes()),
+            b"Termination" => self.game.game_data.parse_termination(&value.as_bytes()),
             _ => {}
         }
     }
@@ -281,7 +307,7 @@ fn main() {
         let (game_send, game_recv) = crossbeam::channel::bounded(128);
         let (result_send, result_recv) = crossbeam::channel::bounded(128);
         let send_game_counter = game_counter.clone();
-        let receive_game_counter = game_counter.clone();
+        // let receive_game_counter = game_counter.clone();
 
 
         crossbeam::scope(|scope| {
@@ -289,21 +315,22 @@ fn main() {
             let filename = arg.clone();
             let moves_filename = filename.clone().replace(".pgn.zst", ".moves");
             let result_filename = filename.clone().replace(".pgn.zst", ".bin");
+            let num_threads = 8;
 
             scope.spawn(move |_| {
                 let mut num_games = 0;
                 for game in BufferedReader::new(uncompressed).into_iter(&mut validator) {
                     let game_data = game.expect("io");
-                    // println!("Sending: {:?}", game_data.game_data);
                     game_send.send(game_data).unwrap();
                     num_games += 1;
                 }
+                drop(game_send);
+                println!("Parsed {} games", num_games);
                 send_game_counter.store(num_games, Ordering::SeqCst);
                 helpers::save_move_map(validator.move_counter, &moves_filename);
             });
 
-
-            for _ in 0..7 {
+            for _ in 0..num_threads {
                 let game_recv: crossbeam::channel::Receiver<Game> = game_recv.clone();
                 let result_send = result_send.clone();
                 let success = success.clone();
@@ -318,22 +345,15 @@ fn main() {
                         let result = game.get_game_data();
                         result_send.send(result).unwrap();
                     }
+                    drop(result_send);
                 });
             }
 
-
+            drop(result_send);
 
             scope.spawn(move |_| {
-                let mut v = Vec::new();
-                let mut num_games = 0;
-                for game_data in result_recv {
-                    // println!("Receiving {}: {:?}", num_games, game_data);
-                    v.push(game_data);
-                    num_games += 1;
-                    if num_games == receive_game_counter.load(Ordering::SeqCst) {
-                        break;
-                    }
-                }
+                let v: Vec<GameData> = result_recv.iter().collect();
+                println!("Saving {} elements", v.len());
 
                 let p = v.as_ptr().cast();
                 let l = v.len() * mem::size_of::<GameData>();
