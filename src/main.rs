@@ -1,10 +1,14 @@
 // Validates moves in PGNs.
 // Usage: cargo run --release --example validate -- [PGN]...
 
+mod helpers;
+
 use std::{env, fs::File, io, mem, slice, sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 }};
+
+use std::collections::HashMap;
 use std::sync::atomic::AtomicI64;
 use std::time::Instant;
 
@@ -15,7 +19,8 @@ use shakmaty::{Chess, Position, Move};
 #[repr(C)]
 struct GamePlayerData {
     elo: i16,
-    missed_mates: i16,
+    missed_mates: u16,
+    missed_wins: u16, // TODO: implement
     en_passant_mates: u8,
     missed_en_passant_mates: u8,
     en_passants: u8,
@@ -27,6 +32,7 @@ impl GamePlayerData {
         GamePlayerData{
             elo: 0,
             missed_mates: 0,
+            missed_wins: 0,
             en_passant_mates: 0,
             missed_en_passant_mates: 0,
             en_passants: 0,
@@ -50,6 +56,10 @@ impl GamePlayerData {
     }
 
     fn check_possible_moves(&mut self, pos: &Chess, m: &Move) {
+        let mut board_copy = pos.clone();
+        board_copy.play_unchecked(m);
+        let is_checkmate = board_copy.is_checkmate();
+
         for possible_move in pos.legal_moves() {
             if possible_move.eq(m) {
                 continue;
@@ -57,7 +67,7 @@ impl GamePlayerData {
             let mut board_copy = pos.clone();
             board_copy.play_unchecked(&possible_move);
             if board_copy.is_checkmate() {
-                self.missed_mates += 1;
+                self.missed_mates += !is_checkmate as u16;
                 if possible_move.is_en_passant() {
                     self.missed_en_passant_mates += 1;
                 }
@@ -67,7 +77,11 @@ impl GamePlayerData {
                 self.declined_en_passants += 1;
             }
         }
+    }
 
+    fn set_elo(&mut self, value: &[u8]) {
+        let s = std::str::from_utf8(value).unwrap();
+        self.elo = if s.len() == 1 {0} else {s.parse::<i16>().unwrap()};
     }
 }
 
@@ -76,6 +90,9 @@ impl GamePlayerData {
 struct GameData {
     white_player: GamePlayerData,
     black_player: GamePlayerData,
+    time_control: u8,
+    result: u8, // TODO: implement
+    termination: u8, // TODO: implement
 }
 
 impl GameData {
@@ -83,7 +100,39 @@ impl GameData {
         GameData {
             white_player: GamePlayerData::new(),
             black_player: GamePlayerData::new(),
+            time_control: 0,
+            result: 0,
+            termination: 0,
         }
+    }
+
+    fn parse_time_control(&mut self, value: &[u8]) {
+        let s = std::str::from_utf8(value).unwrap();
+        let l = s.split(" ").collect::<Vec<&str>>();
+
+        self.time_control = match l[..] {
+            ["Rated", speed, "game"] => match speed {
+                "Correspondence" => 1,
+                "Classical" => 2,
+                "Standard" => 3,
+                "Rapid" => 4,
+                "Blitz" => 5,
+                "Bullet" => 6,
+                "UltraBullet" => 7,
+                _ => unimplemented!(),
+            },
+            ["Rated", speed, "tournament", _] => match speed {
+                "Correspondence" => 10,
+                "Classical" => 11,
+                "Standard" => 12,
+                "Rapid" => 13,
+                "Blitz" => 14,
+                "Bullet" => 15,
+                "UltraBullet" => 16,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!(),
+        };
     }
 }
 
@@ -127,6 +176,7 @@ impl Game {
 
 struct Validator {
     games: usize,
+    move_counter: HashMap<SanPlus, u64>,
     game: Game,
 }
 
@@ -134,6 +184,7 @@ impl Validator {
     fn new() -> Validator {
         Validator {
             games: 0,
+            move_counter: HashMap::new(),
             game: Game {
                 index: 0,
                 pos: Chess::default(),
@@ -151,26 +202,30 @@ impl Visitor for Validator {
     fn begin_game(&mut self) {
         self.games += 1;
     }
+/*
+--    [Event "Rated Blitz game"]
+    [Site "https://lichess.org/WY6NhS1w"]
+    [White "Daniluch"]
+    [Black "amgad55"]
+    [Result "0-1"]
+    [UTCDate "2017.12.31"]
+    [UTCTime "23:03:16"]
+--    [WhiteElo "1449"]
+--    [BlackElo "1474"]
+    [WhiteRatingDiff "-10"]
+    [BlackRatingDiff "+10"]
+    [ECO "A40"]
+    [Opening "Horwitz Defense"]
+    [TimeControl "300+0"]
+    [Termination "Normal"]
+*/
 
     fn header(&mut self, key: &[u8], value: RawHeader<'_>) {
         // Support games from a non-standard starting position.
         match key {
-            b"WhiteElo" => {
-                let s = std::str::from_utf8(value.as_bytes()).unwrap();
-                if s.eq("?") {
-                    self.game.game_data.white_player.elo = 0;
-                } else {
-                    self.game.game_data.white_player.elo = s.parse::<i16>().unwrap();
-                }
-            },
-            b"BlackElo" => {
-                let s = std::str::from_utf8(value.as_bytes()).unwrap();
-                if s.eq("?") {
-                    self.game.game_data.black_player.elo = 0;
-                } else {
-                    self.game.game_data.black_player.elo = s.parse::<i16>().unwrap();
-                }
-            },
+            b"WhiteElo" => self.game.game_data.white_player.set_elo(&value.as_bytes()),
+            b"BlackElo" => self.game.game_data.black_player.set_elo(&value.as_bytes()),
+            b"Event" => self.game.game_data.parse_time_control(&value.as_bytes()),
             _ => {}
         }
     }
@@ -181,6 +236,8 @@ impl Visitor for Validator {
 
     fn san(&mut self, san_plus: SanPlus) {
         if self.game.success {
+            // let cleaned_san = helpers::clean_sanplus(&san_plus);
+            *self.move_counter.entry(san_plus.clone()).or_insert(0) += 1;
             self.game.sans.push(san_plus.san);
         }
     }
@@ -230,6 +287,9 @@ fn main() {
         crossbeam::scope(|scope| {
 
             let filename = arg.clone();
+            let moves_filename = filename.clone().replace(".pgn.zst", ".moves");
+            let result_filename = filename.clone().replace(".pgn.zst", ".bin");
+
             scope.spawn(move |_| {
                 let mut num_games = 0;
                 for game in BufferedReader::new(uncompressed).into_iter(&mut validator) {
@@ -239,10 +299,12 @@ fn main() {
                     num_games += 1;
                 }
                 send_game_counter.store(num_games, Ordering::SeqCst);
+                helpers::save_move_map(validator.move_counter, &moves_filename);
             });
 
+
             for _ in 0..7 {
-                let game_recv = game_recv.clone();
+                let game_recv: crossbeam::channel::Receiver<Game> = game_recv.clone();
                 let result_send = result_send.clone();
                 let success = success.clone();
                 scope.spawn(move |_| {
@@ -259,6 +321,8 @@ fn main() {
                 });
             }
 
+
+
             scope.spawn(move |_| {
                 let mut v = Vec::new();
                 let mut num_games = 0;
@@ -274,7 +338,7 @@ fn main() {
                 let p = v.as_ptr().cast();
                 let l = v.len() * mem::size_of::<GameData>();
                 let d = unsafe { slice::from_raw_parts(p, l) };
-                std::fs::write(filename.replace(".pgn.zst", ".bin"), d).unwrap();
+                std::fs::write(result_filename, d).unwrap();
             });
 
         }).unwrap();
@@ -284,9 +348,11 @@ fn main() {
         let elapsed = now.elapsed();
         let num_games = game_counter.clone().load(Ordering::SeqCst);
         let speed = num_games as f64 / elapsed.as_secs_f64();
+
         println!("Elapsed: {:.2?}\nSpeed: {:.2} games/second\nGames: {}", elapsed, speed, num_games);
         let success = success.load(Ordering::SeqCst);
         println!("{}: {}", &arg, if success { "success" } else { "errors" });
+        // println!("{:?}", move_counter);
         complete_success &= success;
     }
 
