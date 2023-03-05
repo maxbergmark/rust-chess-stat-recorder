@@ -4,6 +4,20 @@ from collections import defaultdict
 import numpy_indexed as npi
 from enum import Enum
 
+
+class Result(Enum):
+    WHITE_WIN = 1
+    BLACK_WIN = 2
+    DRAW = 3
+    UNFINISHED = 4
+
+class Termination(Enum):
+    NORMAL = 1
+    TIME_FORFEIT = 2
+    ABANDONED = 3
+    UNTERMINATED = 4
+    RULES_INFRACTION = 5
+
 class TimeControl(Enum):
     CORRESPONDENCE_GAME = 1
     CLASSICAL_GAME = 2
@@ -25,6 +39,7 @@ class TimeControl(Enum):
         return self.name.lower().replace("_", " ")
 
 game_player_data = np.dtype([
+    ('name', "S20"),
     ('elo', np.int16),
     ('missed_mates', np.int16),
     ('missed_wins', np.int16),
@@ -37,6 +52,7 @@ game_player_data = np.dtype([
 game_player_data = np.dtype([
     ('white_player_data', game_player_data),
     ('black_player_data', game_player_data),
+    ('game_link', "S8"),
     ('time_control', np.uint8),
     ('result', np.uint8),
     ('termination', np.uint8),
@@ -57,11 +73,11 @@ def get_en_passant_rate(arr, time_controls, time_control):
         counts *= (10 / counts.max())
     return key, value, counts, arr.size, f"en passant acceptance rate for {time_control.format()}"
 
-def get_missed_mates(arr, time_controls, time_control):
+def get_missed_wins(arr, time_controls, time_control):
     arr = arr[time_controls == time_control.value]
     group = npi.group_by(arr["elo"])
 #     print(group)
-    key, value = group.mean(arr["missed_mates"])
+    key, value = group.mean(arr["missed_wins"])
 #     print(key, value)
     counts = group.count.astype(np.float64)
     if counts.size > 0:
@@ -75,18 +91,28 @@ def get_time_control_stats(arr):
     for k, v in zip(key, value):
         print(TimeControl(k), v)
 
-arr = np.fromfile("resources/lichess_db_standard_rated_2013-01.bin", dtype=game_player_data)
+arr = np.fromfile("resources/lichess_db_standard_rated_2018-01.bin", dtype=game_player_data)
+arr = arr[arr["termination"] != Termination.UNTERMINATED.value]
 # arr["white_player_data"]["elo"] //= 10
 # arr["white_player_data"]["elo"] *= 10
 
-all_player_data = np.array([arr["white_player_data"], arr["black_player_data"]])
+print(arr[(arr["time_control"] == TimeControl.CLASSICAL_TOURNAMENT.value) & (arr["white_player_data"]["elo"] > 2000) & (arr["white_player_data"]["missed_wins"] > 0)])
+print(arr[(arr["time_control"] == TimeControl.CLASSICAL_TOURNAMENT.value) & (arr["black_player_data"]["elo"] > 2000) & (arr["black_player_data"]["missed_wins"] > 0)])
+quit()
+
+
+
+all_player_data = np.array([*arr["white_player_data"], *arr["black_player_data"]])
 all_player_data["elo"] //= 10
 all_player_data["elo"] *= 10
-time_controls_np = np.array([arr["time_control"], arr["time_control"]])
+
+time_controls_np = np.array([*arr["time_control"], *arr["time_control"]])
+
+
 
 time_controls = [
-#     TimeControl.CORRESPONDENCE_GAME,
-#     TimeControl.CLASSICAL_GAME,
+    TimeControl.CORRESPONDENCE_GAME,
+    TimeControl.CLASSICAL_GAME,
 #     TimeControl.STANDARD_GAME,
     TimeControl.RAPID_GAME,
     TimeControl.BLITZ_GAME,
@@ -95,13 +121,13 @@ time_controls = [
 ]
 
 checks = [
-    get_missed_mates,
+    get_missed_wins,
     get_en_passant_rate
 ]
 get_time_control_stats(arr)
 
 fig, axes = plt.subplots(len(checks), len(time_controls))
-fig.suptitle(f"Chess stats for January 2013 ({len(arr)} games)")
+fig.suptitle(f"Chess stats for January 2018 ({len(arr)} games)")
 for check, ax_row in zip(checks, axes):
     for time_control, ax in zip(time_controls, ax_row):
         x, y, s, num_games, title = check(all_player_data, time_controls_np, time_control)
