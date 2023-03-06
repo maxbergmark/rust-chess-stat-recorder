@@ -38,13 +38,16 @@ impl ParallelParser {
         self.filename.clone().replace(".pgn.zst", ".bin")
     }
 
-    fn spawn_parser_thread(&self, scope: &Scope, uncompressed: Box<dyn io::Read + Send>, game_send: Sender<Game>) {
+    fn spawn_parser_thread(&self, scope: &Scope, game_send: Sender<Game>) {
+
         let filename = self.get_moves_filename();
         let game_counter = self.game_counter.clone();
+        let game_stream = BufferedReader::new(self.get_file());
+
         scope.spawn(move |_| {
             let mut validator = Validator::new();
             let mut num_games = 0;
-            for game in BufferedReader::new(uncompressed).into_iter(&mut validator) {
+            for game in game_stream.into_iter(&mut validator) {
                 let game_data = game.expect("io");
                 game_send.send(game_data).unwrap();
                 num_games += 1;
@@ -95,13 +98,11 @@ impl ParallelParser {
 
     fn get_file(&self) -> Box<dyn io::Read + Send> {
         let file = File::open(&self.filename).expect("fopen");
-
         let uncompressed: Box<dyn io::Read + Send> = if self.filename.ends_with(".zst") {
             Box::new(zstd::Decoder::new(file).expect("zst decoder"))
         } else {
             Box::new(file)
         };
-
         uncompressed
     }
 
@@ -112,20 +113,17 @@ impl ParallelParser {
         let success = self.success.load(Ordering::SeqCst);
         println!("{}: {}", self.filename, if success { "success" } else { "errors" });
         println!("Elapsed: {:.2?}\nSpeed: {:.2} games/second\nGames: {}", elapsed, speed, num_games);
-
     }
 
     pub(crate) fn process_file(&self) -> bool {
         let start_time = Instant::now();
-        let uncompressed = self.get_file();
         let (game_send, game_recv) = crossbeam::channel::bounded(128);
         let (result_send, result_recv) = crossbeam::channel::bounded(128);
 
         crossbeam::scope(|scope| {
-            self.spawn_parser_thread(scope, uncompressed, game_send);
+            self.spawn_parser_thread(scope, game_send);
             self.spawn_worker_threads(scope, game_recv, result_send);
             self.spawn_collector_thread(scope, result_recv);
-
         }).unwrap();
 
         self.print_stats(start_time);
