@@ -31,11 +31,11 @@ impl ParallelParser {
     }
 
     fn get_moves_filename(&self) -> String {
-        self.filename.clone().replace(".pgn.zst", ".moves")
+        self.filename.clone().replace(".pgn.zst", "") + ".moves"
     }
 
     fn get_bin_filename(&self) -> String {
-        self.filename.clone().replace(".pgn.zst", ".bin")
+        self.filename.clone().replace(".pgn.zst", "") + ".bin"
     }
 
     fn spawn_parser_thread(&self, scope: &Scope, game_send: Sender<Game>) {
@@ -97,10 +97,13 @@ impl ParallelParser {
     }
 
     fn get_file(&self) -> Box<dyn io::Read + Send> {
-        let file = File::open(&self.filename).expect("fopen");
         let uncompressed: Box<dyn io::Read + Send> = if self.filename.ends_with(".zst") {
+            let file = File::open(&self.filename).expect("fopen");
             Box::new(zstd::Decoder::new(file).expect("zst decoder"))
+        } else if self.filename.ends_with(".remote") {
+            Box::new(zstd::Decoder::new(io::stdin()).expect("zst stdin decoder"))
         } else {
+            let file = File::open(&self.filename).expect("fopen");
             Box::new(file)
         };
         uncompressed

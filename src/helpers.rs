@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use pgn_reader::{Role, San, SanPlus};
+use crate::validator::FirstMove;
 
 pub (crate) fn clean_sanplus(san_plus: &SanPlus) ->  SanPlus {
     let cleaned_san = match &san_plus.san {
@@ -41,17 +42,17 @@ pub (crate) fn clean_sanplus(san_plus: &SanPlus) ->  SanPlus {
     }
 }
 
-pub (crate) fn save_move_map(moves: HashMap<SanPlus, u64>, moves_filename: &str) {
+pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename: &str) {
     println!("Number of unique moves: {}", moves.len());
 
     let mut cleaned_moves = HashMap::new();
     for (k, v) in moves.iter() {
         let cleaned_key = clean_sanplus(k);
-        *cleaned_moves.entry(cleaned_key).or_insert(0) += v;
+        cleaned_moves.entry(cleaned_key).or_insert(FirstMove::new()).merge(v);
     }
 
     let move_counter_str  = cleaned_moves.into_iter()
-        .map(|(k, v)| {format!("{}: {}", k.to_string(), v)})
+        .map(|(k, v)| {format!("{}, {}, {}, {}", k.to_string(), v.count, v.first_played, v.game_link)})
         .collect::<Vec<_>>()
         .join("\n");
 

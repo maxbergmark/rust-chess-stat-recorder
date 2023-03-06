@@ -37,7 +37,7 @@ class TimeControl(Enum):
     ULTRABULLET_TOURNAMENT = 16
 
     def format(self):
-        return self.name.lower().replace("_", " ")
+        return self.name.lower().split("_")[0]
 
 game_player_data = np.dtype([
     ('name', "S20"),
@@ -101,7 +101,7 @@ class AggregatedSet:
 
 class Visualizer:
 
-    @timed
+#     @timed
     def __init__(self, filename):
         self.filename = filename
         self.data_sets = {}
@@ -158,7 +158,7 @@ class Visualizer:
         counts = group.count.astype(np.float64)
 #         if counts.size > 0:
 #             counts *= (10 / counts.max())
-        return AggregatedSet(key, value, counts, arr.size, f"en passant acceptance rate for {time_control.format()}")
+        return AggregatedSet(key, value, counts, arr.size, f"En passant rate, {time_control.format()}")
 
     def get_missed_wins(self, time_control):
         arr = self.all_player_data[self.time_controls_np == time_control.value]
@@ -167,7 +167,7 @@ class Visualizer:
         counts = group.count.astype(np.float64)
 #         if counts.size > 0:
 #             counts *= (10 / counts.max())
-        return AggregatedSet(key, value, counts, arr.size, f"Missed wins per game for {time_control.format()}")
+        return AggregatedSet(key, value, counts, arr.size, f"Missed wins, {time_control.format()}")
 
     def get_time_control_stats(self):
         group = npi.group_by(self.arr["time_control"])
@@ -183,14 +183,14 @@ class Visualizer:
         is_decisive_game = (arr["result"] == Result.WHITE_WIN.value) | (arr["result"] == Result.BLACK_WIN.value)
         is_high_elo = (arr["white_player_data"]["elo"] > 1800) | (arr["black_player_data"]["elo"] > 1800)
         is_low_elo = (arr["white_player_data"]["elo"] < 1200) | (arr["black_player_data"]["elo"] < 1200)
-        has_missed_wins = (arr["white_player_data"]["missed_wins"] > 10) | (arr["black_player_data"]["missed_wins"] > 10)
+        has_missed_wins = (arr["white_player_data"]["missed_wins"] > 5) | (arr["black_player_data"]["missed_wins"] > 10)
         has_en_passant_mate = (arr["white_player_data"]["en_passant_mates"] > 0) | (arr["black_player_data"]["en_passant_mates"] > 0)
         has_missed_en_passant_mate = (arr["white_player_data"]["missed_en_passant_mates"] > 0) | (arr["black_player_data"]["missed_en_passant_mates"] > 0)
-        check = is_decisive_game & is_high_elo & is_normal_termination & has_missed_wins
+        check = is_correspondence & is_decisive_game & is_high_elo & is_normal_termination & has_missed_wins
 #         check = has_missed_en_passant_mate & is_high_elo
         print(arr[check])
 
-    @timed
+#     @timed
     def parse(self):
         n = self.arr.size
         print(n)
@@ -215,6 +215,10 @@ class Visualizer:
 
         fig, axes = plt.subplots(len(self.checks), len(self.time_controls))
         fig.suptitle(f"Chess stats for January 2018 ({self.num_games} games)")
+        limits = {
+            self.get_missed_wins.__name__: [0, 0.3],
+            self.get_en_passant_rate.__name__: [0, 1]
+        }
 
         for check, ax_row in zip(self.checks, axes):
             for time_control, ax in zip(self.time_controls, ax_row):
@@ -225,41 +229,84 @@ class Visualizer:
                 if len(x) == 0:
                     continue
                 ax.scatter(x, y, s=s)
+                print(min(x), max(x))
 
                 ax.set_title(title, wrap=True)
                 ax.set_ylabel(f"Average {check.__name__}")
                 ax.set_xlim([500, 3000])
-                ax.set_ylim([0, 1])
+                ax.set_ylim(limits[check.__name__])
                 ax.set_xlabel("Player ELO")
 
         plt.show()
 
 def parse_bin_files():
     sum_visualizer = Visualizer(None)
-    for filename in sorted(filter(lambda s: s.endswith(".bin"), os.listdir("resources"))):
+    for filename in sorted(filter(lambda s: s.endswith(".remote.bin"), os.listdir("resources"))):
         print(filename)
         visualizer = Visualizer(f"resources/{filename}")
-        visualizer.find_outliers()
+#         visualizer.find_outliers()
         sum_visualizer += visualizer
 
     sum_visualizer.plot()
 #         visualizer.plot()
 
+def check_piece_moves(all_moves):
+    for piece in "KQRNB":
+        for file in "abcdefgh":
+            for rank in "12345678":
+                for checks in ("#", "+", ""):
+                    for capture in ("x", ""):
+                        move = f"{piece}{capture}{file}{rank}{checks}"
+                        if move not in all_moves:
+                            print(move, "has not been played")
+
+def possible_pawn_moves(file, rank):
+    yield f"{file}{rank}"
+    if file < "h":
+        yield f"{chr(ord(file)+1)}x{file}{rank}"
+    if file > "a":
+        yield f"{chr(ord(file)-1)}x{file}{rank}"
+
+def check_pawn_moves(all_moves):
+    moves = []
+    for file in "abcdefgh":
+        for rank in "12345678":
+            for checks in ("#", "+", ""):
+                for move in possible_pawn_moves(file, rank):
+                    if rank in "18":
+                        moves.append(f"{move}=Q{checks}")
+                        moves.append(f"{move}=R{checks}")
+                        moves.append(f"{move}=N{checks}")
+                        moves.append(f"{move}=B{checks}")
+                    else:
+                        moves.append(f"{move}{checks}")
+
+    for move in moves:
+        if move not in all_moves:
+            print(move, "has not been played")
+
+def check_all_moves(all_moves):
+    check_piece_moves(all_moves)
+    check_pawn_moves(all_moves)
+
 def parse_move_files():
     all_moves = defaultdict(int)
-    for filename in sorted(filter(lambda s: s.endswith(".moves"), os.listdir("resources"))):
+    for filename in sorted(filter(lambda s: s.endswith(".remote.moves"), os.listdir("resources"))):
         for line in open(f"resources/{filename}", "r"):
             key, value = line.strip().split(": ")
             all_moves[key] += int(value)
 
+    print(f"Total moves: {sum(all_moves.values()):.2e}")
+
     print(len(all_moves))
-    for k, v in all_moves.items():
-        if v < 5:
-            print(k, v)
+    check_all_moves(all_moves)
+#     for k, v in all_moves.items():
+#         if v < 2:
+#             print(k, v)
 
 
 
 
 if __name__ == "__main__":
-#     parse_move_files()
-    parse_bin_files()
+    parse_move_files()
+#     parse_bin_files()
