@@ -62,7 +62,7 @@ impl ParallelParser {
     fn spawn_worker_threads(&self, scope: &Scope, game_recv: Receiver<Game>, result_send: Sender<GameData>) {
 
         for _ in 0..self.num_threads {
-            let game_recv: crossbeam::channel::Receiver<Game> = game_recv.clone();
+            let game_recv: Receiver<Game> = game_recv.clone();
             let result_send = result_send.clone();
             let success = self.success.clone();
             scope.spawn(move |_| {
@@ -98,12 +98,12 @@ impl ParallelParser {
 
     fn get_file(&self) -> Box<dyn io::Read + Send> {
         let uncompressed: Box<dyn io::Read + Send> = if self.filename.ends_with(".zst") {
-            let file = File::open(&self.filename).expect("fopen");
+            let file = File::open(&self.filename).expect("file open");
             Box::new(zstd::Decoder::new(file).expect("zst decoder"))
         } else if self.filename.ends_with(".remote") {
             Box::new(zstd::Decoder::new(io::stdin()).expect("zst stdin decoder"))
         } else {
-            let file = File::open(&self.filename).expect("fopen");
+            let file = File::open(&self.filename).expect("file open");
             Box::new(file)
         };
         uncompressed
