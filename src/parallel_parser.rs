@@ -1,9 +1,12 @@
+// extern crate core_affinity;
+
 use std::{io, mem, slice};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Instant;
+use core_affinity;
 use crossbeam::channel::{Receiver, Sender};
 use crossbeam::thread::Scope;
 use pgn_reader::BufferedReader;
@@ -46,6 +49,12 @@ impl ParallelParser {
         let game_stream = BufferedReader::new(self.get_file());
 
         scope.spawn(move |_| {
+            let core_ids = core_affinity::get_core_ids().unwrap();
+            let res = core_affinity::set_for_current(core_ids[0]);
+            if !res {
+                eprintln!("Could not set affinity");
+            }
+
             let mut validator = Validator::new();
             let mut num_games = 0;
             for game in game_stream.into_iter(&mut validator) {
