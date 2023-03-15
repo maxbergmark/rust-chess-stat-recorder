@@ -1,5 +1,6 @@
 use std::{io, mem, slice};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Instant;
@@ -72,9 +73,10 @@ impl ParallelParser {
                     if !is_valid {
                         eprintln!("illegal move in game {}", index);
                         success.store(false, Ordering::SeqCst);
+                    } else {
+                        let result = game.get_game_data();
+                        result_send.send(result).unwrap();
                     }
-                    let result = game.get_game_data();
-                    result_send.send(result).unwrap();
                 }
                 drop(result_send);
             });
@@ -82,17 +84,38 @@ impl ParallelParser {
         drop(result_send);
     }
 
+    fn write_batch(file: &mut File, v: &Vec<GameData>) {
+        let p = v.as_ptr().cast();
+        let size = mem::size_of::<GameData>();
+        let l = v.len() * size;
+        let d = unsafe { slice::from_raw_parts(p, l) };
+        // println!("Saving {} elements of size {}", v.len(), size);
+        file.write(d).expect("Could not write to file");
+
+    }
+
     fn spawn_collector_thread(&self, scope: &Scope, result_recv: Receiver<GameData>) {
         let filename = self.get_bin_filename();
-        scope.spawn(move |_| {
-            let v: Vec<GameData> = result_recv.iter().collect();
-            let size = mem::size_of::<GameData>();
-            println!("Saving {} elements of size {}", v.len(), size);
 
-            let p = v.as_ptr().cast();
-            let l = v.len() * size;
-            let d = unsafe { slice::from_raw_parts(p, l) };
-            std::fs::write(filename, d).unwrap();
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(filename)
+            .unwrap();
+
+        scope.spawn(move |_| {
+            let batch_size = 1000;
+            let mut v = Vec::with_capacity(batch_size);
+            for game_data in result_recv.iter() {
+                v.push(game_data);
+                if v.len() >= batch_size {
+                    ParallelParser::write_batch(&mut file, &v);
+                    v.clear();
+                }
+            }
+            if v.len() > 0 {
+                ParallelParser::write_batch(&mut file, &v);
+            }
         });
     }
 

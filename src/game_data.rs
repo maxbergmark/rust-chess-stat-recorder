@@ -13,6 +13,7 @@ pub (crate) struct GameData {
     pub(crate) time_control: TimeControl,
     pub(crate) result: GameResult,
     pub(crate) termination: Termination,
+    pub(crate) half_moves: u16,
 }
 
 impl GameData {
@@ -25,6 +26,7 @@ impl GameData {
             time_control: TimeControl::RatedStandardGame,
             result: GameResult::Unfinished,
             termination: Termination::Unterminated,
+            half_moves: 0,
         }
     }
 
