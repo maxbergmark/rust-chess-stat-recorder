@@ -16,9 +16,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+amiquip = "0.4.2"
 chrono = "0.4.23"
 core_affinity = "0.8.0"
 crossbeam = "0.8.2"
+cute = "0.3.0"
 pgn-reader = "0.22.0"
 rayon = "1.6.1"
 regex = "1.7.1"

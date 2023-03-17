@@ -8,21 +8,14 @@ mod game_player_data;
 mod game_data;
 mod validator;
 mod parallel_parser;
+mod multichannel_parser;
 
+// #[macro_use(c)]
+extern crate cute;
 
-use std::env;
-use crate::parallel_parser::ParallelParser;
+use crate::multichannel_parser::MultiChannelParser;
 
 fn main() {
-    let mut complete_success = true;
-
-    for arg in env::args().skip(1) {
-        let parser = ParallelParser::new(&arg, 8);
-        let success = parser.process_file();
-        complete_success &= success;
-    }
-
-    if !complete_success {
-        std::process::exit(1);
-    }
+    let parser = MultiChannelParser::new(2, 4);
+    parser.start_consumer();
 }

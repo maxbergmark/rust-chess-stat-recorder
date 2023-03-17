@@ -42,7 +42,7 @@ pub (crate) fn clean_sanplus(san_plus: &SanPlus) ->  SanPlus {
     }
 }
 
-pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename: &str) {
+pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename: String) {
     println!("Number of unique moves: {}", moves.len());
 
     let mut cleaned_moves = HashMap::new();
