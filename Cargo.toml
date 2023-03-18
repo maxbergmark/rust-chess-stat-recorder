@@ -26,3 +26,8 @@ rayon = "1.6.1"
 regex = "1.7.1"
 shakmaty = "0.23"
 zstd = "0.12.3"
+
+[[bin]]
+edition = "2021"
+name = "rust_chess"
+path = "src/main.rs"
