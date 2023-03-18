@@ -1,7 +1,6 @@
 use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions};
 use crossbeam::channel::Sender;
 use crossbeam::thread::Scope;
-use cute::c;
 use crate::parallel_parser::ParallelParser;
 
 pub(crate) struct MultiChannelParser {
@@ -25,7 +24,7 @@ impl MultiChannelParser {
         // Open a channel - None says let the library choose the channel ID.
         let channel = connection.open_channel(None).unwrap();
 
-        let declaration = QueueDeclareOptions {
+        let options = QueueDeclareOptions {
             durable: true,
             exclusive: false,
             auto_delete: false,
@@ -33,7 +32,7 @@ impl MultiChannelParser {
         };
 
         // Declare the "hello" queue.
-        let queue = channel.queue_declare("chess-files", declaration).unwrap();
+        let queue = channel.queue_declare("chess-files", options).unwrap();
 
         // Start a consumer.
         let consumer = queue.consume(ConsumerOptions::default()).unwrap();
@@ -73,7 +72,9 @@ impl MultiChannelParser {
     pub(crate) fn start_consumer(&self) {
 
         let (filename_send, filename_recv) = crossbeam::channel::bounded(0);
-        let parsers = c![ParallelParser::new(i, self.threads_per_channel), for i in 0..self.num_channels];
+        let parsers: Vec<_> = (0..self.num_channels)
+            .map(|i| ParallelParser::new(i, self.threads_per_channel))
+            .collect();
         // let parser = ParallelParser::new(0,8);
         crossbeam::scope(|scope| {
             self.spawn_queue_consumer_thread(scope, filename_send);

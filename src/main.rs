@@ -1,6 +1,3 @@
-// Validates moves in PGNs.
-// Usage: cargo run --release --example validate -- [PGN]...
-
 mod helpers;
 mod enums;
 mod game;
@@ -9,9 +6,6 @@ mod game_data;
 mod validator;
 mod parallel_parser;
 mod multichannel_parser;
-
-// #[macro_use(c)]
-extern crate cute;
 
 use crate::multichannel_parser::MultiChannelParser;
 
