@@ -51,7 +51,7 @@ fn map_to_csv(map: HashMap<SanPlus, FirstMove>) -> String {
 
 pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename: String) {
     println!("Number of unique moves: {}", moves.len());
-    let raw_moves_filename = &moves_filename + ".raw";
+    let raw_moves_filename = moves_filename.clone() + ".raw";
 
     let mut cleaned_moves = HashMap::new();
     for (k, v) in moves.iter() {
