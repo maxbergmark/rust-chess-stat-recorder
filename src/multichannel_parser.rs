@@ -46,8 +46,9 @@ impl MultiChannelParser {
                     ConsumerMessage::Delivery(delivery) => {
                         let body = String::from_utf8_lossy(&delivery.body);
                         println!("({:>3}) Received [{}]", i, body);
+                        let message = body.to_string();
                         consumer.ack(delivery).unwrap();
-                        filename_send.send(body.to_string()).unwrap();
+                        filename_send.send(message).unwrap();
                     }
                     other => {
                         println!("Consumer ended: {:?}", other);
