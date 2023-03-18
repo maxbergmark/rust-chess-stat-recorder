@@ -42,8 +42,16 @@ pub (crate) fn clean_sanplus(san_plus: &SanPlus) ->  SanPlus {
     }
 }
 
+fn map_to_csv(map: HashMap<SanPlus, FirstMove>) -> String {
+    map.into_iter()
+        .map(|(k, v)| {format!("{}, {}, {}, {}", k.to_string(), v.count, v.first_played, v.game_link)})
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename: String) {
     println!("Number of unique moves: {}", moves.len());
+    let raw_moves_filename = &moves_filename + ".raw";
 
     let mut cleaned_moves = HashMap::new();
     for (k, v) in moves.iter() {
@@ -51,10 +59,9 @@ pub (crate) fn save_move_map(moves: HashMap<SanPlus, FirstMove>, moves_filename:
         cleaned_moves.entry(cleaned_key).or_insert(FirstMove::new()).merge(v);
     }
 
-    let move_counter_str  = cleaned_moves.into_iter()
-        .map(|(k, v)| {format!("{}, {}, {}, {}", k.to_string(), v.count, v.first_played, v.game_link)})
-        .collect::<Vec<_>>()
-        .join("\n");
+    let move_counter_str  = map_to_csv(cleaned_moves);
+    let raw_move_counter_str = map_to_csv(moves);
 
     std::fs::write(moves_filename, move_counter_str).unwrap();
+    std::fs::write(raw_moves_filename, raw_move_counter_str).unwrap();
 }
