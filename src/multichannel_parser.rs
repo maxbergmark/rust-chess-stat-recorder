@@ -18,46 +18,54 @@ impl MultiChannelParser {
         }
     }
 
+    fn receive_queue_message() -> Option<String> {
+        // Open connection.
+        let mut connection = Connection::insecure_open("amqp://guest:guest@192.168.10.200:30672").unwrap();
+
+        // Open a channel - None says let the library choose the channel ID.
+        let channel = connection.open_channel(None).unwrap();
+
+        let declaration = QueueDeclareOptions {
+            durable: true,
+            exclusive: false,
+            auto_delete: false,
+            arguments: Default::default(),
+        };
+
+        // Declare the "hello" queue.
+        let queue = channel.queue_declare("chess-files", declaration).unwrap();
+
+        // Start a consumer.
+        let consumer = queue.consume(ConsumerOptions::default()).unwrap();
+
+        let message = consumer.receiver().recv().unwrap();
+        match message {
+            ConsumerMessage::Delivery(delivery) => {
+                let body = String::from_utf8_lossy(&delivery.body);
+                println!("Received [{}]", body);
+                let s = body.to_string();
+                consumer.ack(delivery).unwrap();
+                Some(s)
+            }
+            _ => {None}
+        }
+    }
+
     fn spawn_queue_consumer_thread(&self, scope: &Scope, filename_send: Sender<String>) {
 
         scope.spawn(move |_| {
-            // Open connection.
-            let mut connection = Connection::insecure_open("amqp://guest:guest@192.168.10.200:30672").unwrap();
-
-            // Open a channel - None says let the library choose the channel ID.
-            let channel = connection.open_channel(None).unwrap();
-
-            let declaration = QueueDeclareOptions {
-                durable: true,
-                exclusive: false,
-                auto_delete: false,
-                arguments: Default::default(),
-            };
-
-            // Declare the "hello" queue.
-            let queue = channel.queue_declare("chess-files", declaration).unwrap();
-
-            // Start a consumer.
-            let consumer = queue.consume(ConsumerOptions::default()).unwrap();
-            println!("Waiting for messages. Press Ctrl-C to exit.");
-
-            for (i, message) in consumer.receiver().iter().enumerate() {
+            loop {
+                let message = Self::receive_queue_message();
                 match message {
-                    ConsumerMessage::Delivery(delivery) => {
-                        let body = String::from_utf8_lossy(&delivery.body);
-                        println!("({:>3}) Received [{}]", i, body);
-                        let message = body.to_string();
-                        consumer.ack(delivery).unwrap();
-                        filename_send.send(message).unwrap();
+                    Some(s) => {
+                        filename_send.send(s).unwrap();
                     }
-                    other => {
-                        println!("Consumer ended: {:?}", other);
+                    None => {
+                        println!("Consumer ended");
                         break;
                     }
                 }
             }
-
-            // connection.close();
         });
 
     }
