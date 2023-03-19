@@ -80,16 +80,23 @@ def parse_file(filename):
     elapsed = t1-t0
     n = size // game_data.itemsize
     print(f"{filename}: {n:.2e} games in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
+    return n
 
 def parse_bin_files():
     filenames = sorted(filter(lambda s: s.endswith(".bin"), os.listdir(base_dir)), reverse=True)
+    full_filenames = list(map(lambda s: f"{base_dir}/{s}", filenames))
+    t0 = time.perf_counter()
 
 #     process single-threaded
 #     for filename in filenames:
 #         parse_file(f"{base_dir}/{filename}")
-
     with multiprocessing.Pool(8) as pool:
-        pool.map(parse_file, map(lambda s: f"{base_dir}/{s}", filenames))
+        num_games = pool.map(parse_file, full_filenames, chunksize=1)
+
+    t1 = time.perf_counter()
+    elapsed = t1-t0
+    n = sum(num_games)
+    print(f"Total: {n} games parsed in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
 
 
 if __name__ == "__main__":
