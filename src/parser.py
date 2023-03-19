@@ -19,32 +19,38 @@ def parse_chunk(data):
     all_player_data[:n] = data["white_player_data"]
     all_player_data[n:] = data["black_player_data"]
 
+
     time_controls_np = np.empty(2*n, dtype=np.uint8)
     time_controls_np[:n] = data["time_control"]
     time_controls_np[n:] = data["time_control"]
-
     group = npi.group_by((all_player_data["elo"], time_controls_np))
     ret = np.zeros((4000, 20), dtype=aggregation_data)
 
     for metric in get_result_metrics():
         insert_group_sum(all_player_data, group, ret, metric)
 
-    (elo, time_control), values = group.unique, group.count
-    np.add.at(ret["count"], (elo, time_control), values)
+    (elo, time_control), time_control_values = group.unique, group.count
+    np.add.at(ret["count"], (elo, time_control), time_control_values)
+
+    half_moves_np = np.empty(2*n, dtype=np.uint16)
+    half_moves_np[:n] = data["half_moves"]
+    half_moves_np[n:] = data["half_moves"]
+    (elo, time_control), half_move_values = group.sum(half_moves_np)
+    np.add.at(ret["half_moves"], (elo, time_control), half_move_values)
 
     terminations_np = np.empty(2*n, dtype=np.uint8)
     terminations_np[:n] = data["termination"]
     terminations_np[n:] = data["termination"]
     for termination in Termination:
-        (elo, time_control), value = group.sum(terminations_np == termination.value)
-        np.add.at(ret["terminations"][termination.name], (elo, time_control), value)
+        (elo, time_control), termination_values = group.sum(terminations_np == termination.value)
+        np.add.at(ret["terminations"][termination.name], (elo, time_control), termination_values)
 
     results_np = np.empty(2*n, dtype=np.uint8)
     results_np[:n] = data["result"]
     results_np[n:] = data["result"]
     for result in Result:
-        (elo, time_control), value = group.sum(results_np == result.value)
-        np.add.at(ret["results"][result.name], (elo, time_control), value)
+        (elo, time_control), result_values = group.sum(results_np == result.value)
+        np.add.at(ret["results"][result.name], (elo, time_control), result_values)
 
     return ret
 
@@ -62,6 +68,7 @@ def parse_file(filename):
         for metric in get_result_metrics():
             total[metric] += result[metric]
 
+        total["half_moves"] += result["half_moves"]
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
         for res in Result:

@@ -38,6 +38,9 @@ def get_en_passants(data):
 def declined_en_passants(data):
     return data["declined_en_passants"] / np.maximum(data["count"], 1)
 
+def get_num_moves(data):
+    return data["half_moves"] / np.maximum(data["count"], 1)
+
 def get_termination_stats(data):
     ret = np.zeros((data.size, len(Termination)), dtype=np.float64)
     for i, termination in enumerate(Termination):
@@ -57,6 +60,7 @@ def get_checks():
 #         get_en_passants,
 #         get_en_passant_mate_rate,
 #         declined_en_passants,
+        get_num_moves,
         get_termination_stats,
         get_result_stats,
     ]
@@ -107,6 +111,7 @@ def plot(result):
         get_en_passants: [0, .05],
         declined_en_passants: [0, .1],
         get_en_passant_mate_rate: [0, 1],
+        get_num_moves: [0, 1],
         get_termination_stats: [0, 1],
         get_result_stats: [0, 1],
     }
@@ -116,6 +121,7 @@ def plot(result):
         get_en_passants: plot_average,
         declined_en_passants: plot_average,
         get_en_passant_mate_rate: plot_average,
+        get_num_moves: plot_average,
         get_termination_stats: plot_distribution,
         get_result_stats: plot_distribution,
     }
