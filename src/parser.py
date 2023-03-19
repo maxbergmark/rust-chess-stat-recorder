@@ -5,6 +5,7 @@ import time
 import multiprocessing
 
 from common import game_data, game_player_data, aggregation_data, get_result_metrics, Termination, Result
+from num_games_dict import num_games_dict
 
 base_dir = "./resources"
 # base_dir = "/home/max/storage/chess"
@@ -54,6 +55,10 @@ def parse_chunk(data):
 
     return ret
 
+def get_period_from_filename(filename):
+    part = filename.split("_")[-1].replace(".bin", "")
+    return tuple(map(int, part.split("-")))
+
 def parse_file(filename):
     t0 = time.perf_counter()
     result_filename = filename.replace(".bin", ".result")
@@ -86,7 +91,9 @@ def parse_file(filename):
     t1 = time.perf_counter()
     elapsed = t1-t0
     n = size // game_data.itemsize
-    print(f"{filename}: {n:.2e} games in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
+    year, month = get_period_from_filename(filename)
+    p = n / num_games_dict[(year, month)]
+    print(f"{filename}: {n:.2e} games ({100*p:.2f}%) in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
     return n
 
 def parse_bin_files():
