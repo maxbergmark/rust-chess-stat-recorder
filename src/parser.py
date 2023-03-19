@@ -112,6 +112,13 @@ def parse_bin_files():
     n = sum(num_games)
     print(f"Total: {n} games parsed in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
 
+def check_missing_files():
+    filenames = sorted(filter(lambda s: s.endswith(".pgn.zst"), os.listdir(base_dir)))
+    for filename in filenames:
+        bin_filename = filename.replace(".pgn.zst", ".bin")
+        if not os.path.isfile(bin_filename):
+            print(f"Missing file: {bin_filename}")
 
 if __name__ == "__main__":
     parse_bin_files()
+    check_missing_files
