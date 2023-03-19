@@ -7,7 +7,7 @@ from enum import Enum
 import time
 import os
 
-from common import result_data, get_result_metrics, TimeControl
+from common import aggregation_data, get_result_metrics, TimeControl, Termination, Result
 
 base_dir = "./resources"
 # base_dir = "/home/max/storage/chess"
@@ -38,17 +38,56 @@ def get_en_passants(data):
 def declined_en_passants(data):
     return data["declined_en_passants"] / np.maximum(data["count"], 1)
 
+def get_termination_stats(data):
+    ret = np.zeros((data.size, len(Termination)), dtype=np.float64)
+    for i, termination in enumerate(Termination):
+        ret[:,i] = data["terminations"][termination.name]
+    return ret / np.maximum(ret.sum(axis=1), 1)[:,np.newaxis], Termination
+
+def get_result_stats(data):
+    ret = np.zeros((data.size, len(Result)), dtype=np.float64)
+    for i, result in enumerate(Result):
+        ret[:,i] = data["results"][result.name]
+    return ret / np.maximum(ret.sum(axis=1), 1)[:,np.newaxis], Result
 
 def get_checks():
     return [
         get_average_missed_wins,
-        get_en_passant_rate,
+#         get_en_passant_rate,
 #         get_en_passants,
 #         get_en_passant_mate_rate,
-        declined_en_passants,
+#         declined_en_passants,
+        get_termination_stats,
+        get_result_stats,
     ]
 
+def plot_average(result, ax, time_control, check):
+    data = result[:,time_control.value]
+    x = data["elo"]
+    y = check(data)
+    s = data["count"] / max(1, data["count"].max())
 
+    if len(x) == 0:
+        return
+    ax.scatter(x, y, s=s)
+    ax.text(0.98, 0.98, f"{data['count'].sum():.2e} players",
+         horizontalalignment='right',
+         verticalalignment='top',
+         transform = ax.transAxes)
+
+def plot_distribution(result, ax, time_control, check):
+    data = result[:,time_control.value]
+    x = data["elo"]
+    ys, enum_values = check(data)
+#     print(ys)
+
+    offset = (0*x).astype(np.float64)
+    ax.stackplot(x, *ys.T, labels=list(map(lambda e: e.name, enum_values)))
+    ax.legend()
+#     for y in ys.T:
+#         print(time_control, y.shape)
+#         ax.bar(x, y, bottom=offset)
+#         offset += y
 
 def plot(result):
 
@@ -63,36 +102,37 @@ def plot(result):
     )
     fig.suptitle(f"Chess stats for ({result['count'].sum():.2e} players)")
     limits = {
-        get_average_missed_wins.__name__: [0, .3],
-        get_en_passant_rate.__name__: [0, 1],
-        get_en_passants.__name__: [0, .05],
-        declined_en_passants.__name__: [0, .1],
-        get_en_passant_mate_rate.__name__: [0, 1]
+        get_average_missed_wins: [0, .3],
+        get_en_passant_rate: [0, 1],
+        get_en_passants: [0, .05],
+        declined_en_passants: [0, .1],
+        get_en_passant_mate_rate: [0, 1],
+        get_termination_stats: [0, 1],
+        get_result_stats: [0, 1],
+    }
+    plot_types = {
+        get_average_missed_wins: plot_average,
+        get_en_passant_rate: plot_average,
+        get_en_passants: plot_average,
+        declined_en_passants: plot_average,
+        get_en_passant_mate_rate: plot_average,
+        get_termination_stats: plot_distribution,
+        get_result_stats: plot_distribution,
     }
 
     for i, (check, ax_row) in enumerate(zip(get_checks(), axes)):
         ax_row[0].set_ylabel(f"{check.__name__}")
         for time_control, ax in zip(get_time_controls(), ax_row):
 
-            data = result[:,time_control.value]
-            x = data["elo"]
-            y = check(data)
-            s = data["count"] / max(1, data["count"].max())
-
-            if len(x) == 0:
-                continue
-            ax.scatter(x, y, s=s)
-            ax.text(0.98, 0.98, f"{data['count'].sum():.2e} players",
-                 horizontalalignment='right',
-                 verticalalignment='top',
-                 transform = ax.transAxes)
+            plot_function = plot_types[check]
+            plot_function(result, ax, time_control, check)
 
 
             title = f"{time_control.format()}"
             if i == 0:
                 ax.set_title(title, wrap=True)
             ax.set_xlim([0, 4000])
-            ax.set_ylim(limits[check.__name__])
+            ax.set_ylim(limits[check])
             if i == len(axes)-1:
                 ax.set_xlabel("Player ELO")
 
@@ -100,15 +140,20 @@ def plot(result):
 
 
 def get_summed_result_files():
-    total = np.zeros((4000, 20), dtype=result_data)
-    for filename in sorted(filter(lambda s: s.endswith(".remote.result"), os.listdir(base_dir))):
-        result = np.fromfile(f"{base_dir}/{filename}", dtype=result_data)
+    total = np.zeros((4000, 20), dtype=aggregation_data)
+    for filename in sorted(filter(lambda s: s.endswith(".result"), os.listdir(base_dir))):
+        result = np.fromfile(f"{base_dir}/{filename}", dtype=aggregation_data)
 
         result.shape = (4000, 20)
         total["elo"] = result["elo"]
         total["time_control"] = result["time_control"]
         for metric in get_result_metrics():
             total[metric] += result[metric]
+        for termination in Termination:
+            total["terminations"][termination.name] += result["terminations"][termination.name]
+        for res in Result:
+            total["results"][res.name] += result["results"][res.name]
+
         total["count"] += result["count"]
 
     return total

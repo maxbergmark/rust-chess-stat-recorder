@@ -53,10 +53,20 @@ game_data = np.dtype([
     ('time_control', np.uint8),
     ('result', np.uint8),
     ('termination', np.uint8),
-    ('padding', np.uint8)
+    ('padding', np.uint8),
+    ('half_moves', np.uint16),
+    ('padding2', np.uint16)
+])
+
+termination_data = np.dtype([
+    (termination.name, np.int32) for termination in Termination
 ])
 
 result_data = np.dtype([
+    (result.name, np.int32) for result in Result
+])
+
+aggregation_data = np.dtype([
     ('elo', np.int32),
     ('time_control', np.int32),
     ('missed_mates', np.int32),
@@ -65,7 +75,10 @@ result_data = np.dtype([
     ('missed_en_passant_mates', np.int32),
     ('en_passants', np.int32),
     ('declined_en_passants', np.int32),
-    ('count', np.int32)
+    ('half_moves', np.int32),
+    ('terminations', termination_data),
+    ('results', result_data),
+    ('count', np.int32) # important for aggregation
 ])
 
 def timed(f):
