@@ -7,8 +7,8 @@ import multiprocessing
 from common import game_data, game_player_data, aggregation_data, get_result_metrics, Termination, Result
 from num_games_dict import num_games_dict
 
-base_dir = "./resources"
-# base_dir = "/home/max/storage/chess"
+# base_dir = "./resources"
+base_dir = "/home/max/storage/chess"
 
 def insert_group_sum(data, group, result, key):
     (elo, time_control), values = group.sum(data[key])
@@ -62,6 +62,8 @@ def get_period_from_filename(filename):
 def parse_file(filename):
     t0 = time.perf_counter()
     result_filename = filename.replace(".bin", ".result")
+    if os.path.isfile(result_filename):
+        return 0
     chunk_size = 1000000
     size = os.path.getsize(filename)
     total = np.zeros((4000, 20), dtype=aggregation_data)
@@ -107,7 +109,7 @@ def parse_bin_files():
 #     process single-threaded
 #     for filename in filenames:
 #         parse_file(f"{base_dir}/{filename}")
-    with multiprocessing.Pool(8) as pool:
+    with multiprocessing.Pool(6) as pool:
         num_games = pool.map(parse_file, full_filenames, chunksize=1)
 
     t1 = time.perf_counter()
@@ -117,8 +119,9 @@ def parse_bin_files():
 
 def check_missing_files():
     filenames = sorted(filter(lambda s: s.endswith(".pgn.zst"), os.listdir(base_dir)))
+    full_filenames = list(map(lambda s: f"{base_dir}/{s}", filenames))
     print("Missing files:")
-    for filename in filenames:
+    for filename in full_filenames:
         bin_filename = filename.replace(".pgn.zst", ".bin")
         result_filename = filename.replace(".pgn.zst", ".result")
         if not os.path.isfile(bin_filename):
@@ -128,4 +131,4 @@ def check_missing_files():
 
 if __name__ == "__main__":
     parse_bin_files()
-    check_missing_files
+    check_missing_files()

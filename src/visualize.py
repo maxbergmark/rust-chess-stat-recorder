@@ -23,6 +23,41 @@ def get_time_controls():
            TimeControl.ULTRABULLET_GAME
        ]
 
+def get_termination_color(termination):
+    return {
+        Termination.NORMAL: "#000000",
+        Termination.TIME_FORFEIT: "#222222",
+        Termination.ABANDONED: "#444444",
+        Termination.UNTERMINATED: "#666666",
+        Termination.RULES_INFRACTION: "#888888",
+    }[termination]
+
+def get_result_color(result):
+    return {
+        Result.WHITE_WIN: "#ffffff",
+        Result.BLACK_WIN: "#000000",
+        Result.DRAW: "#888888",
+        Result.UNFINISHED: "#ffaaaa",
+    }[result]
+
+def get_termination_order():
+    return list(range(5))
+
+def get_result_order():
+    return [0, 2, 3, 1]
+
+def get_enum_color(e):
+    if type(e) == Termination:
+        return get_termination_color(e)
+    elif type(e) == Result:
+        return get_result_color(e)
+
+def get_enum_order(e):
+    if e == Termination:
+        return get_termination_order()
+    elif e == Result:
+        return get_result_order()
+
 def get_average_missed_wins(data):
     return data["missed_wins"] / np.maximum(data["count"], 1)
 
@@ -39,7 +74,8 @@ def declined_en_passants(data):
     return data["declined_en_passants"] / np.maximum(data["count"], 1)
 
 def get_num_moves(data):
-    return data["half_moves"] / np.maximum(data["count"], 1)
+    # divide by two to get whole moves
+    return data["half_moves"] / (2 * np.maximum(data["count"], 1))
 
 def get_termination_stats(data):
     ret = np.zeros((data.size, len(Termination)), dtype=np.float64)
@@ -83,17 +119,17 @@ def plot_distribution(result, ax, time_control, check):
     data = result[:,time_control.value]
     x = data["elo"]
     ys, enum_values = check(data)
-#     print(ys)
+    order = get_enum_order(enum_values)
+    ys_ordered = ys[:,order]
+    enum_ordered = [list(enum_values)[o] for o in order]
 
-    offset = (0*x).astype(np.float64)
-    ax.stackplot(x, *ys.T, labels=list(map(lambda e: e.name, enum_values)))
-    ax.legend()
-#     for y in ys.T:
-#         print(time_control, y.shape)
-#         ax.bar(x, y, bottom=offset)
-#         offset += y
+    colors = list(map(get_enum_color, enum_ordered))
+    ax.stackplot(x, *ys_ordered.T, labels=list(map(lambda e: e.name, enum_ordered)), colors=colors)
+    ax.legend(loc="lower right")
+
 
 def plot(result):
+
 
     fig, axes = plt.subplots(len(get_checks()), len(get_time_controls()))
     fig.subplots_adjust(
@@ -111,7 +147,7 @@ def plot(result):
         get_en_passants: [0, .05],
         declined_en_passants: [0, .1],
         get_en_passant_mate_rate: [0, 1],
-        get_num_moves: [0, 1],
+        get_num_moves: [0, 60],
         get_termination_stats: [0, 1],
         get_result_stats: [0, 1],
     }
@@ -155,6 +191,7 @@ def get_summed_result_files():
         total["time_control"] = result["time_control"]
         for metric in get_result_metrics():
             total[metric] += result[metric]
+        total["half_moves"] += result["half_moves"]
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
         for res in Result:
