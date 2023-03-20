@@ -81,6 +81,9 @@ def parse_file(filename):
 
         total["count"] += result["count"]
         offset += game_data.itemsize * batch_size
+        if batch_size == 0:
+            print(f"File {filename} is broken")
+            break
 
     elos = np.tile(np.arange(4000).reshape(4000, 1), (1, 20))
     time_controls = np.tile(np.arange(20), (4000, 1))
@@ -114,10 +117,14 @@ def parse_bin_files():
 
 def check_missing_files():
     filenames = sorted(filter(lambda s: s.endswith(".pgn.zst"), os.listdir(base_dir)))
+    print("Missing files:")
     for filename in filenames:
         bin_filename = filename.replace(".pgn.zst", ".bin")
+        result_filename = filename.replace(".pgn.zst", ".result")
         if not os.path.isfile(bin_filename):
             print(f"Missing file: {bin_filename}")
+        if not os.path.isfile(result_filename):
+            print(f"Missing file: {result_filename}")
 
 if __name__ == "__main__":
     parse_bin_files()
