@@ -45,6 +45,14 @@ game_player_data = np.dtype([
     ('declined_en_passants', np.uint8),
 ])
 
+enriched_game_player_data = np.dtype(
+    game_player_data.descr + [
+    ('half_moves', np.uint16),
+    ('result', np.uint8),
+    ('termination', np.uint8),
+    ('time_control', np.uint8),
+])
+
 game_data = np.dtype([
     ('white_player_data', game_player_data),
     ('black_player_data', game_player_data),
@@ -69,17 +77,45 @@ result_data = np.dtype([
 aggregation_data = np.dtype([
     ('elo', np.int32),
     ('time_control', np.int32),
-    ('missed_mates', np.int32),
-    ('missed_wins', np.int32),
+
+    ('missed_mates_avg', np.float32),
+    ('missed_mates_var', np.float32),
+
+    ('missed_wins_avg', np.float32),
+    ('missed_wins_var', np.float32),
+
+    ('en_passants_avg', np.float32),
+    ('en_passants_var', np.float32),
+
+    ('declined_en_passants_avg', np.float32),
+    ('declined_en_passants_var', np.float32),
+
+    ('half_moves_avg', np.float32),
+    ('half_moves_var', np.float32),
+
     ('en_passant_mates', np.int32),
     ('missed_en_passant_mates', np.int32),
-    ('en_passants', np.int32),
-    ('declined_en_passants', np.int32),
-    ('half_moves', np.int32),
     ('terminations', termination_data),
     ('results', result_data),
     ('count', np.int32) # important for aggregation
 ])
+
+def get_combined_mean_and_variance(total, result, metric):
+    mean_t = total[f"{metric}_avg"]
+    var_t = total[f"{metric}_var"]
+    n_t = total["count"]
+
+    mean_r = result[f"{metric}_avg"]
+    var_r = result[f"{metric}_var"]
+    n_r = result["count"]
+
+    # for empty groups we want to avoid dividing by zero
+    n_c = np.maximum(1, n_t + n_r)
+    mean_c = (n_t * mean_t + n_r * mean_r) / n_c
+    # using the standard formula for combining variances of normal distributions
+    var_c = (n_t * var_t + n_r * mean_r + n_t * (mean_t - mean_c)**2 + n_r * (mean_r - mean_c)**2) / n_c
+    return mean_c, var_c
+
 
 def timed(f):
     def timed_f(*args, **kw):
@@ -89,12 +125,17 @@ def timed(f):
         print(f"{f.__name__}: {t1-t0:.3f}")
     return timed_f
 
-def get_result_metrics():
+def get_averaged_metrics():
     return [
         "missed_mates",
         "missed_wins",
+        "en_passants",
+        "declined_en_passants",
+        "half_moves",
+    ]
+
+def get_counted_metrics():
+    return [
         "en_passant_mates",
         "missed_en_passant_mates",
-        "en_passants",
-        "declined_en_passants"
     ]

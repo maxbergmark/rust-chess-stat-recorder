@@ -4,7 +4,8 @@ import os
 import time
 import multiprocessing
 
-from common import game_data, game_player_data, aggregation_data, get_result_metrics, Termination, Result
+from common import (game_data, game_player_data, enriched_game_player_data, aggregation_data, get_averaged_metrics,
+                    get_counted_metrics, Termination, Result, get_combined_mean_and_variance)
 from num_games_dict import num_games_dict
 
 # base_dir = "./resources"
@@ -14,43 +15,47 @@ def insert_group_sum(data, group, result, key):
     (elo, time_control), values = group.sum(data[key])
     np.add.at(result[key], (elo, time_control), values)
 
-def parse_chunk(data):
+def insert_group_average(data, group, result, key):
+    (elo, time_control), averages = group.mean(data[key])
+    _, variances = group.var(data[key])
+    np.add.at(result[f"{key}_avg"], (elo, time_control), averages)
+    np.add.at(result[f"{key}_var"], (elo, time_control), variances)
+
+def get_ordered_fields(dtype):
+    items = sorted(dtype.fields.items(), key=lambda e: e[1][1])
+    return list(map(lambda e: e[0], items))
+
+def get_enriched_data(data):
     n = data.size
-    all_player_data = np.empty(2*n, dtype=game_player_data)
-    all_player_data[:n] = data["white_player_data"]
-    all_player_data[n:] = data["black_player_data"]
+    all_player_data = np.empty(2*n, dtype=enriched_game_player_data)
+    fields = get_ordered_fields(game_player_data)
+    all_player_data[:n][fields] = data["white_player_data"]
+    all_player_data[n:][fields] = data["black_player_data"]
+    other_fields = ["time_control", "termination", "result", "half_moves"]
+    all_player_data[:n][other_fields] = data[other_fields]
+    all_player_data[n:][other_fields] = data[other_fields]
+    return all_player_data
 
-
-    time_controls_np = np.empty(2*n, dtype=np.uint8)
-    time_controls_np[:n] = data["time_control"]
-    time_controls_np[n:] = data["time_control"]
-    group = npi.group_by((all_player_data["elo"], time_controls_np))
+def parse_chunk(data):
+    all_player_data = get_enriched_data(data)
+    group = npi.group_by((all_player_data["elo"], all_player_data["time_control"]))
     ret = np.zeros((4000, 20), dtype=aggregation_data)
 
-    for metric in get_result_metrics():
+    (elo, time_control), counts = group.unique, group.count
+    np.add.at(ret["count"], (elo, time_control), counts)
+
+    for metric in get_counted_metrics():
         insert_group_sum(all_player_data, group, ret, metric)
 
-    (elo, time_control), time_control_values = group.unique, group.count
-    np.add.at(ret["count"], (elo, time_control), time_control_values)
+    for metric in get_averaged_metrics():
+        insert_group_average(all_player_data, group, ret, metric)
 
-    half_moves_np = np.empty(2*n, dtype=np.uint16)
-    half_moves_np[:n] = data["half_moves"]
-    half_moves_np[n:] = data["half_moves"]
-    (elo, time_control), half_move_values = group.sum(half_moves_np)
-    np.add.at(ret["half_moves"], (elo, time_control), half_move_values)
-
-    terminations_np = np.empty(2*n, dtype=np.uint8)
-    terminations_np[:n] = data["termination"]
-    terminations_np[n:] = data["termination"]
     for termination in Termination:
-        (elo, time_control), termination_values = group.sum(terminations_np == termination.value)
+        (elo, time_control), termination_values = group.sum(all_player_data["termination"] == termination.value)
         np.add.at(ret["terminations"][termination.name], (elo, time_control), termination_values)
 
-    results_np = np.empty(2*n, dtype=np.uint8)
-    results_np[:n] = data["result"]
-    results_np[n:] = data["result"]
     for result in Result:
-        (elo, time_control), result_values = group.sum(results_np == result.value)
+        (elo, time_control), result_values = group.sum(all_player_data["result"] == result.value)
         np.add.at(ret["results"][result.name], (elo, time_control), result_values)
 
     return ret
@@ -62,8 +67,8 @@ def get_period_from_filename(filename):
 def parse_file(filename):
     t0 = time.perf_counter()
     result_filename = filename.replace(".bin", ".result")
-    if os.path.isfile(result_filename):
-        return 0
+#     if os.path.isfile(result_filename):
+#         return 0
     chunk_size = 1000000
     size = os.path.getsize(filename)
     total = np.zeros((4000, 20), dtype=aggregation_data)
@@ -72,16 +77,22 @@ def parse_file(filename):
         batch_size = min(chunk_size, (size - offset) // game_data.itemsize)
         data = np.fromfile(filename, offset=offset, count=batch_size, dtype=game_data)
         result = parse_chunk(data)
-        for metric in get_result_metrics():
+        total["count"] += result["count"]
+
+        for metric in get_counted_metrics():
             total[metric] += result[metric]
 
-        total["half_moves"] += result["half_moves"]
+        for metric in get_averaged_metrics():
+            mean_c, var_c = get_combined_mean_and_variance(total, result, metric)
+            total[f"{metric}_avg"] = mean_c
+            total[f"{metric}_var"] = var_c
+
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
+
         for res in Result:
             total["results"][res.name] += result["results"][res.name]
 
-        total["count"] += result["count"]
         offset += game_data.itemsize * batch_size
         if batch_size == 0:
             print(f"File {filename} is broken")
@@ -105,10 +116,9 @@ def parse_bin_files():
     filenames = sorted(filter(lambda s: s.endswith(".bin"), os.listdir(base_dir)), reverse=True)
     full_filenames = list(map(lambda s: f"{base_dir}/{s}", filenames))
     t0 = time.perf_counter()
-
+    num_games = []
 #     process single-threaded
-#     for filename in filenames:
-#         parse_file(f"{base_dir}/{filename}")
+#     num_games = list(map(parse_file, full_filenames))
     with multiprocessing.Pool(6) as pool:
         num_games = pool.map(parse_file, full_filenames, chunksize=1)
 

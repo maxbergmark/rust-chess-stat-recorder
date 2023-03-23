@@ -7,7 +7,8 @@ from enum import Enum
 import time
 import os
 
-from common import aggregation_data, get_result_metrics, TimeControl, Termination, Result
+from common import (aggregation_data, get_counted_metrics, get_averaged_metrics, TimeControl,
+                    Termination, Result, get_combined_mean_and_variance)
 
 base_dir = "./resources"
 # base_dir = "/home/max/storage/chess"
@@ -59,7 +60,7 @@ def get_enum_order(e):
         return get_result_order()
 
 def get_average_missed_wins(data):
-    return data["missed_wins"] / np.maximum(data["count"], 1)
+    return data["missed_wins_avg"], data["missed_wins_var"]
 
 def get_en_passant_rate(data):
     return data["en_passants"] / (data["en_passants"] + data["declined_en_passants"])
@@ -75,7 +76,7 @@ def declined_en_passants(data):
 
 def get_num_moves(data):
     # divide by two to get whole moves
-    return data["half_moves"] / (2 * np.maximum(data["count"], 1))
+    return data["half_moves_avg"] / 2, data["half_moves_var"] / 4
 
 def get_termination_stats(data):
     ret = np.zeros((data.size, len(Termination)), dtype=np.float64)
@@ -104,12 +105,14 @@ def get_checks():
 def plot_average(result, ax, time_control, check):
     data = result[:,time_control.value]
     x = data["elo"]
-    y = check(data)
+    y, variance = check(data)
+    std_dev = variance ** .5
     s = data["count"] / max(1, data["count"].max())
 
     if len(x) == 0:
         return
-    ax.scatter(x, y, s=s)
+    ax.fill_between(x, y-std_dev, y+std_dev, alpha=1.0, color="#aaaaaa")
+    ax.scatter(x, y, s=s, color="#000000")
     ax.text(0.98, 0.98, f"{data['count'].sum():.2e} players",
          horizontalalignment='right',
          verticalalignment='top',
@@ -184,14 +187,19 @@ def plot(result):
 def get_summed_result_files():
     total = np.zeros((4000, 20), dtype=aggregation_data)
     for filename in sorted(filter(lambda s: s.endswith(".result"), os.listdir(base_dir))):
+#         print(filename)
         result = np.fromfile(f"{base_dir}/{filename}", dtype=aggregation_data)
 
         result.shape = (4000, 20)
         total["elo"] = result["elo"]
         total["time_control"] = result["time_control"]
-        for metric in get_result_metrics():
+        for metric in get_counted_metrics():
             total[metric] += result[metric]
-        total["half_moves"] += result["half_moves"]
+        for metric in get_averaged_metrics():
+            mean_c, var_c = get_combined_mean_and_variance(total, result, metric)
+            total[f"{metric}_avg"] = mean_c
+            total[f"{metric}_var"] = var_c
+
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
         for res in Result:
