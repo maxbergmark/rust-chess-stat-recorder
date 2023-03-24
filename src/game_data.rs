@@ -5,7 +5,7 @@ use crate::game_player_data::GamePlayerData;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub (crate) struct GameData {
+pub(crate) struct GameData {
     pub(crate) white_player: GamePlayerData,
     pub(crate) black_player: GamePlayerData,
     pub(crate) start_time: u32,
@@ -37,7 +37,7 @@ impl GameData {
             "1/2-1/2" => GameResult::Draw,
             "0-1" => GameResult::BlackWin,
             "*" => GameResult::Unfinished, // some correspondence games take more than a month to complete
-            _ => unimplemented!("Result: {}", s)
+            _ => unimplemented!("Result: {}", s),
         }
     }
 
@@ -49,10 +49,9 @@ impl GameData {
             "Abandoned" => Termination::Abandoned,
             "Unterminated" => Termination::Unterminated,
             "Rules infraction" => Termination::RulesInfraction,
-            _ => unimplemented!("Termination: {}", s)
+            _ => unimplemented!("Termination: {}", s),
         }
     }
-
 
     pub(crate) fn parse_time_control(&mut self, value: &[u8]) {
         let s = std::str::from_utf8(value).unwrap();
@@ -85,7 +84,7 @@ impl GameData {
 
     pub(crate) fn parse_site(&mut self, value: &[u8]) {
         let l = value.len();
-        self.game_link[..8].clone_from_slice(&value[l-8..l]);
+        self.game_link[..8].clone_from_slice(&value[l - 8..l]);
     }
 
     pub(crate) fn parse_date(&mut self, value: &[u8]) {

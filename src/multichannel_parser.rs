@@ -1,7 +1,7 @@
+use crate::parallel_parser::ParallelParser;
 use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions};
 use crossbeam::channel::Sender;
 use crossbeam::thread::Scope;
-use crate::parallel_parser::ParallelParser;
 
 pub(crate) struct MultiChannelParser {
     num_channels: usize,
@@ -9,7 +9,6 @@ pub(crate) struct MultiChannelParser {
 }
 
 impl MultiChannelParser {
-
     pub(crate) fn new(num_channels: i32, threads_per_channel: i32) -> Self {
         Self {
             num_channels: num_channels as usize,
@@ -19,7 +18,8 @@ impl MultiChannelParser {
 
     fn receive_queue_message() -> Option<String> {
         // Open connection.
-        let mut connection = Connection::insecure_open("amqp://guest:guest@192.168.10.200:30672").unwrap();
+        let mut connection =
+            Connection::insecure_open("amqp://guest:guest@192.168.10.200:30672").unwrap();
 
         // Open a channel - None says let the library choose the channel ID.
         let channel = connection.open_channel(None).unwrap();
@@ -46,31 +46,26 @@ impl MultiChannelParser {
                 consumer.ack(delivery).unwrap();
                 Some(s)
             }
-            _ => {None}
+            _ => None,
         }
     }
 
     fn spawn_queue_consumer_thread(&self, scope: &Scope, filename_send: Sender<String>) {
-
-        scope.spawn(move |_| {
-            loop {
-                let message = Self::receive_queue_message();
-                match message {
-                    Some(s) => {
-                        filename_send.send(s).unwrap();
-                    }
-                    None => {
-                        println!("Consumer ended");
-                        break;
-                    }
+        scope.spawn(move |_| loop {
+            let message = Self::receive_queue_message();
+            match message {
+                Some(s) => {
+                    filename_send.send(s).unwrap();
+                }
+                None => {
+                    println!("Consumer ended");
+                    break;
                 }
             }
         });
-
     }
 
     pub(crate) fn start_consumer(&self) {
-
         let (filename_send, filename_recv) = crossbeam::channel::bounded(0);
         let parsers: Vec<_> = (0..self.num_channels)
             .map(|i| ParallelParser::new(i, self.threads_per_channel))
@@ -85,7 +80,8 @@ impl MultiChannelParser {
                 });
                 // parser.create_channel(scope, filename_recv.clone());
             }
-        }).unwrap();
+        })
+        .unwrap();
     }
 }
 /*

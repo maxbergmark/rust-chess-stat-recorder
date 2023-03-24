@@ -63,16 +63,17 @@ def get_average_missed_wins(data):
     return data["missed_wins_avg"], data["missed_wins_var"]
 
 def get_en_passant_rate(data):
-    return data["en_passants"] / (data["en_passants"] + data["declined_en_passants"])
+    return data["en_passants_avg"] / (data["en_passants_avg"] + data["declined_en_passants_avg"]), 0
 
 def get_en_passant_mate_rate(data):
+    # TODO: fix this
     return data["en_passant_mates"] / (data["en_passant_mates"] + data["missed_en_passant_mates"])
 
 def get_en_passants(data):
-    return data["en_passants"] / np.maximum(data["count"], 1)
+    return data["en_passants_avg"], data["en_passants_var"]
 
 def declined_en_passants(data):
-    return data["declined_en_passants"] / np.maximum(data["count"], 1)
+    return data["declined_en_passants_avg"], data["declined_en_passants_var"]
 
 def get_num_moves(data):
     # divide by two to get whole moves
@@ -94,12 +95,12 @@ def get_checks():
     return [
         get_average_missed_wins,
 #         get_en_passant_rate,
-#         get_en_passants,
+        get_en_passants,
 #         get_en_passant_mate_rate,
-#         declined_en_passants,
+        declined_en_passants,
         get_num_moves,
-        get_termination_stats,
-        get_result_stats,
+#         get_termination_stats,
+#         get_result_stats,
     ]
 
 def plot_average(result, ax, time_control, check):
@@ -133,7 +134,9 @@ def plot_distribution(result, ax, time_control, check):
 
 def plot(result):
 
-
+#     plt.plot(result[:,5]["elo"], result[:,5]["en_passants_avg"], "r")
+#     plt.plot(result[:,5]["elo"], result[:,5]["en_passants_avg"] - result[:,5]["en_passants_var"], "b")
+#     plt.show()
     fig, axes = plt.subplots(len(get_checks()), len(get_time_controls()))
     fig.subplots_adjust(
         left  = 0.05,  # the left side of the subplots of the figure
@@ -187,7 +190,6 @@ def plot(result):
 def get_summed_result_files():
     total = np.zeros((4000, 20), dtype=aggregation_data)
     for filename in sorted(filter(lambda s: s.endswith(".result"), os.listdir(base_dir))):
-#         print(filename)
         result = np.fromfile(f"{base_dir}/{filename}", dtype=aggregation_data)
 
         result.shape = (4000, 20)

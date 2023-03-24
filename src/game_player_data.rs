@@ -1,5 +1,5 @@
-use std::cmp::min;
 use shakmaty::{Chess, Move, Position};
+use std::cmp::min;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -16,7 +16,7 @@ pub(crate) struct GamePlayerData {
 
 impl GamePlayerData {
     pub(crate) fn new() -> GamePlayerData {
-        GamePlayerData{
+        GamePlayerData {
             name: [0; 20],
             elo: 0,
             missed_mates: 0,
@@ -40,7 +40,6 @@ impl GamePlayerData {
         let is_en_passant_mate = board_copy.is_checkmate() & is_en_passant;
         self.en_passant_mates += is_en_passant_mate as u8;
         self.en_passants += is_en_passant as u8;
-
     }
 
     fn check_possible_moves(&mut self, pos: &Chess, m: &Move, is_winner: bool) {
@@ -70,7 +69,11 @@ impl GamePlayerData {
 
     pub(crate) fn set_elo(&mut self, value: &[u8]) {
         let s = std::str::from_utf8(value).unwrap();
-        self.elo = if s.len() == 1 {0} else {s.parse::<i16>().unwrap()};
+        self.elo = if s.len() == 1 {
+            0
+        } else {
+            s.parse::<i16>().unwrap()
+        };
     }
 
     pub(crate) fn set_name(&mut self, value: &[u8]) {

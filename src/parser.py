@@ -41,9 +41,6 @@ def parse_chunk(data):
     group = npi.group_by((all_player_data["elo"], all_player_data["time_control"]))
     ret = np.zeros((4000, 20), dtype=aggregation_data)
 
-    (elo, time_control), counts = group.unique, group.count
-    np.add.at(ret["count"], (elo, time_control), counts)
-
     for metric in get_counted_metrics():
         insert_group_sum(all_player_data, group, ret, metric)
 
@@ -57,6 +54,9 @@ def parse_chunk(data):
     for result in Result:
         (elo, time_control), result_values = group.sum(all_player_data["result"] == result.value)
         np.add.at(ret["results"][result.name], (elo, time_control), result_values)
+
+    (elo, time_control), counts = group.unique, group.count
+    np.add.at(ret["count"], (elo, time_control), counts)
 
     return ret
 
@@ -77,7 +77,6 @@ def parse_file(filename):
         batch_size = min(chunk_size, (size - offset) // game_data.itemsize)
         data = np.fromfile(filename, offset=offset, count=batch_size, dtype=game_data)
         result = parse_chunk(data)
-        total["count"] += result["count"]
 
         for metric in get_counted_metrics():
             total[metric] += result[metric]
@@ -93,6 +92,7 @@ def parse_file(filename):
         for res in Result:
             total["results"][res.name] += result["results"][res.name]
 
+        total["count"] += result["count"]
         offset += game_data.itemsize * batch_size
         if batch_size == 0:
             print(f"File {filename} is broken")

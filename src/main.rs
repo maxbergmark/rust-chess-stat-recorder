@@ -1,11 +1,11 @@
-mod helpers;
 mod enums;
 mod game;
-mod game_player_data;
 mod game_data;
-mod validator;
-mod parallel_parser;
+mod game_player_data;
+mod helpers;
 mod multichannel_parser;
+mod parallel_parser;
+mod validator;
 
 use crate::multichannel_parser::MultiChannelParser;
 

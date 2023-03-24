@@ -1,20 +1,18 @@
-use std::mem;
-use shakmaty::{Chess, Position};
-use shakmaty::san::San;
-use crate::game_data::GameData;
 use crate::enums::GameResult;
+use crate::game_data::GameData;
+use shakmaty::san::San;
+use shakmaty::{Chess, Position};
+use std::mem;
 
-pub (crate) struct Game {
+pub(crate) struct Game {
     pub(crate) index: i64,
     pub(crate) pos: Chess,
     pub(crate) sans: Vec<San>,
     pub(crate) success: bool,
     pub(crate) game_data: GameData,
-
 }
 
 impl Game {
-
     pub(crate) fn validate(&mut self) -> bool {
         for (i, san) in self.sans.iter().enumerate() {
             let m = match san.to_move(&self.pos) {
@@ -23,11 +21,11 @@ impl Game {
             };
             let player_data = match i % 2 {
                 0 => &mut self.game_data.white_player,
-                _ => &mut self.game_data.black_player
+                _ => &mut self.game_data.black_player,
             };
             let is_winner = match i % 2 {
                 0 => matches!(self.game_data.result, GameResult::WhiteWin),
-                _ => matches!(self.game_data.result, GameResult::BlackWin)
+                _ => matches!(self.game_data.result, GameResult::BlackWin),
             };
             player_data.analyze_position(&self.pos, &m, is_winner);
             self.pos.play_unchecked(&m);
@@ -37,10 +35,6 @@ impl Game {
     }
 
     pub(crate) fn get_game_data(&mut self) -> GameData {
-        mem::replace(
-            &mut self.game_data,
-            GameData::new()
-        )
+        mem::replace(&mut self.game_data, GameData::new())
     }
-
 }

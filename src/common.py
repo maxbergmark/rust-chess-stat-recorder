@@ -100,7 +100,7 @@ aggregation_data = np.dtype([
     ('count', np.int32) # important for aggregation
 ])
 
-def get_combined_mean_and_variance(total, result, metric):
+def get_combined_mean_and_variance_old(total, result, metric):
     mean_t = total[f"{metric}_avg"]
     var_t = total[f"{metric}_var"]
     n_t = total["count"]
@@ -116,6 +116,26 @@ def get_combined_mean_and_variance(total, result, metric):
     var_c = (n_t * var_t + n_r * mean_r + n_t * (mean_t - mean_c)**2 + n_r * (mean_r - mean_c)**2) / n_c
     return mean_c, var_c
 
+def get_combined_mean_and_variance(set_a, set_b, metric):
+   # Using the Parallel algorithm found here:
+   # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+    mean_a = set_a[f"{metric}_avg"]
+    n_a = set_a["count"]
+    var_a = set_a[f"{metric}_var"]
+    M2_a = var_a * (n_a - 1)
+
+    mean_b = set_b[f"{metric}_avg"]
+    n_b = set_b["count"]
+    var_b = set_b[f"{metric}_var"]
+    M2_b = var_b * (n_b - 1)
+
+    n_ab = np.maximum(1, n_a + n_b)
+    mean_ab = (n_a * mean_a + n_b * mean_b) / n_ab
+    delta = mean_b - mean_a
+    M2_ab = M2_a + M2_b + delta**2 * n_a * n_b / n_ab
+    var_ab = M2_ab / np.maximum(1, n_ab - 1)
+
+    return mean_ab, var_ab
 
 def timed(f):
     def timed_f(*args, **kw):

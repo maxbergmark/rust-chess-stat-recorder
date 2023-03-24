@@ -1,0 +1,1 @@
+rsync -P elissa:/home/max/storage/chess/lichess_db_standard_rated_*.result ./resources/
