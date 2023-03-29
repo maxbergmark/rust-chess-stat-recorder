@@ -148,10 +148,10 @@ def plot(result):
     )
     fig.suptitle(f"Chess stats for ({result['count'].sum():.2e} players)")
     limits = {
-        get_average_missed_wins: [0, .3],
-        get_en_passant_rate: [0, 1],
-        get_en_passants: [0, .05],
-        declined_en_passants: [0, .1],
+        get_average_missed_wins: [-1, 1.3],
+        get_en_passant_rate: [-1, 2],
+        get_en_passants: [-1, 1.05],
+        declined_en_passants: [-1, 1.1],
         get_en_passant_mate_rate: [0, 1],
         get_num_moves: [0, 60],
         get_termination_stats: [0, 1],
@@ -195,8 +195,10 @@ def get_summed_result_files():
         result.shape = (4000, 20)
         total["elo"] = result["elo"]
         total["time_control"] = result["time_control"]
+
         for metric in get_counted_metrics():
             total[metric] += result[metric]
+
         for metric in get_averaged_metrics():
             mean_c, var_c = get_combined_mean_and_variance(total, result, metric)
             total[f"{metric}_avg"] = mean_c
@@ -204,6 +206,7 @@ def get_summed_result_files():
 
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
+
         for res in Result:
             total["results"][res.name] += result["results"][res.name]
 

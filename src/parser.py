@@ -109,7 +109,8 @@ def parse_file(filename):
     n = size // game_data.itemsize
     year, month = get_period_from_filename(filename)
     p = n / num_games_dict[(year, month)]
-    print(f"{filename}: {n:.2e} games ({100*p:.2f}%) in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
+    missing_games = num_games_dict[(year, month)] - n
+    print(f"{filename}: {n:.2e} games ({100*p:.2f}%, {missing_games} missing) in {elapsed:.2f} seconds ({n/elapsed:.2e}/s)")
     return n
 
 def parse_bin_files():
