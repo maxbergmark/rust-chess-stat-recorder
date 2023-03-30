@@ -5,11 +5,11 @@ import time
 import multiprocessing
 
 from common import (game_data, game_player_data, enriched_game_player_data, aggregation_data, get_averaged_metrics,
-                    get_counted_metrics, Termination, Result, get_combined_mean_and_variance)
+                    get_histogram_metrics, get_counted_metrics, Termination, Result, get_combined_mean_and_variance)
 from num_games_dict import num_games_dict
 
-# base_dir = "./resources"
-base_dir = "/home/max/storage/chess"
+base_dir = "./resources"
+# base_dir = "/home/max/storage/chess"
 
 def insert_group_sum(data, group, result, key):
     (elo, time_control), values = group.sum(data[key])
@@ -20,6 +20,12 @@ def insert_group_average(data, group, result, key):
     _, variances = group.var(data[key])
     np.add.at(result[f"{key}_avg"], (elo, time_control), averages)
     np.add.at(result[f"{key}_var"], (elo, time_control), variances)
+
+def insert_group_histogram(data, group, result, key):
+    metric_group = npi.group_by((data["elo"], data["time_control"], data[key]))
+    (elo, time_control, metric_keys), counts = metric_group.unique, metric_group.count
+    np.add.at(result[f"{key}_hist"], (elo, time_control, metric_keys), counts)
+#     print(result[f"{key}_hist"][2000,5,:])
 
 def get_ordered_fields(dtype):
     items = sorted(dtype.fields.items(), key=lambda e: e[1][1])
@@ -47,6 +53,9 @@ def parse_chunk(data):
     for metric in get_averaged_metrics():
         insert_group_average(all_player_data, group, ret, metric)
 
+    for metric in get_histogram_metrics():
+        insert_group_histogram(all_player_data, group, ret, metric)
+
     for termination in Termination:
         (elo, time_control), termination_values = group.sum(all_player_data["termination"] == termination.value)
         np.add.at(ret["terminations"][termination.name], (elo, time_control), termination_values)
@@ -58,6 +67,13 @@ def parse_chunk(data):
     (elo, time_control), counts = group.unique, group.count
     np.add.at(ret["count"], (elo, time_control), counts)
 
+#     import matplotlib.pyplot as plt
+#     y, x = np.histogram(all_player_data["en_passants"], range=(0, 8), bins=8)
+#     x = x[:-1]
+#     print(x, y)
+#     print(x[y>0], np.log(y[y>0]))
+#     plt.plot(x[y>0], np.log(y[y>0]))
+#     plt.show()
     return ret
 
 def get_period_from_filename(filename):
@@ -86,6 +102,9 @@ def parse_file(filename):
             total[f"{metric}_avg"] = mean_c
             total[f"{metric}_var"] = var_c
 
+        for metric in get_histogram_metrics():
+            total[f"{metric}_hist"] += result[f"{metric}_hist"]
+
         for termination in Termination:
             total["terminations"][termination.name] += result["terminations"][termination.name]
 
@@ -102,6 +121,7 @@ def parse_file(filename):
     time_controls = np.tile(np.arange(20), (4000, 1))
     total["elo"] = elos
     total["time_control"] = time_controls
+    print(total[2000, 5]["en_passants_hist"])
     total.tofile(result_filename)
 
     t1 = time.perf_counter()
@@ -119,9 +139,9 @@ def parse_bin_files():
     t0 = time.perf_counter()
     num_games = []
 #     process single-threaded
-#     num_games = list(map(parse_file, full_filenames))
-    with multiprocessing.Pool(6) as pool:
-        num_games = pool.map(parse_file, full_filenames, chunksize=1)
+    num_games = list(map(parse_file, full_filenames))
+#     with multiprocessing.Pool(6) as pool:
+#         num_games = pool.map(parse_file, full_filenames, chunksize=1)
 
     t1 = time.perf_counter()
     elapsed = t1-t0

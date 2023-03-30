@@ -28,5 +28,5 @@ zstd = "0.12.3"
 
 [[bin]]
 edition = "2021"
-name = "rust_chess"
+name = "rust-chess-stat-recorder"
 path = "src/main.rs"

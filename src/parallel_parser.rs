@@ -154,26 +154,35 @@ impl ParallelParser {
         );
     }
 
+    fn consume_file<'a>(&'a self, scope: &Scope<'a>, filename: String) {
+        println!(
+            "Starting consuming on thread {}: {}",
+            self.channel_id, &filename
+        );
+        *self.filename.lock().unwrap() = filename;
+        self.complete.store(false, Ordering::SeqCst);
+        let (game_send, game_recv) = crossbeam::channel::bounded(128);
+        let (result_send, result_recv) = crossbeam::channel::bounded(128);
+
+        self.spawn_parser_thread(scope, game_send);
+        self.spawn_worker_threads(scope, game_recv, result_send);
+        self.spawn_collector_thread(scope, result_recv);
+
+    }
+
     pub(crate) fn create_channel(&self) {
         loop {
             let filename = match RabbitMqHandler::get_filename_from_queue() {
                 Some(s) => s,
-                None => break,
+                None => {
+                    println!("queue is empty, exiting");
+                    break
+                },
             };
+
             let start_time = Instant::now();
             crossbeam::scope(|scope| {
-                println!(
-                    "Starting consuming on thread {}: {}",
-                    self.channel_id, &filename
-                );
-                *self.filename.lock().unwrap() = filename;
-                self.complete.store(false, Ordering::SeqCst);
-                let (game_send, game_recv) = crossbeam::channel::bounded(128);
-                let (result_send, result_recv) = crossbeam::channel::bounded(128);
-
-                self.spawn_parser_thread(scope, game_send);
-                self.spawn_worker_threads(scope, game_recv, result_send);
-                self.spawn_collector_thread(scope, result_recv);
+                self.consume_file(scope, filename);
             })
             .unwrap();
             self.print_stats(start_time);

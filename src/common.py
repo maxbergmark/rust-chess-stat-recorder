@@ -78,17 +78,21 @@ aggregation_data = np.dtype([
     ('elo', np.int32),
     ('time_control', np.int32),
 
-    ('missed_mates_avg', np.float32),
-    ('missed_mates_var', np.float32),
+    ('missed_mates_hist', (np.uint64, 1024)),
+#     ('missed_mates_avg', np.float32),
+#     ('missed_mates_var', np.float32),
 
-    ('missed_wins_avg', np.float32),
-    ('missed_wins_var', np.float32),
+    ('missed_wins_hist', (np.uint64, 1024)),
+#     ('missed_wins_avg', np.float32),
+#     ('missed_wins_var', np.float32),
 
-    ('en_passants_avg', np.float32),
-    ('en_passants_var', np.float32),
+    ('en_passants_hist', (np.uint64, 8)),
+#     ('en_passants_avg', np.float32),
+#     ('en_passants_var', np.float32),
 
-    ('declined_en_passants_avg', np.float32),
-    ('declined_en_passants_var', np.float32),
+    ('declined_en_passants_hist', (np.uint64, 8)),
+#     ('declined_en_passants_avg', np.float32),
+#     ('declined_en_passants_var', np.float32),
 
     ('half_moves_avg', np.float32),
     ('half_moves_var', np.float32),
@@ -147,10 +151,10 @@ def timed(f):
 
 def get_averaged_metrics():
     return [
-        "missed_mates",
-        "missed_wins",
-        "en_passants",
-        "declined_en_passants",
+#         "missed_mates",
+#         "missed_wins",
+#         "en_passants",
+#         "declined_en_passants",
         "half_moves",
     ]
 
@@ -158,4 +162,12 @@ def get_counted_metrics():
     return [
         "en_passant_mates",
         "missed_en_passant_mates",
+    ]
+
+def get_histogram_metrics():
+    return [
+        "missed_mates",
+        "missed_wins",
+        "en_passants",
+        "declined_en_passants",
     ]

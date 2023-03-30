@@ -1,3 +1,4 @@
+use std::time::Duration;
 use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions};
 
 pub struct RabbitMqHandler;
@@ -19,14 +20,15 @@ impl RabbitMqHandler {
 
         let queue = channel.queue_declare("chess-files", options).unwrap();
 
-        // Start a consumer.
+        // Start a consumer
         let consumer = queue.consume(ConsumerOptions::default()).unwrap();
 
-        let message = consumer.receiver().recv().unwrap();
+        let message = consumer.receiver()
+            .recv_timeout(Duration::from_secs(1));
+
         match message {
-            ConsumerMessage::Delivery(delivery) => {
+            Ok(ConsumerMessage::Delivery(delivery)) => {
                 let body = String::from_utf8_lossy(&delivery.body);
-                // println!("Received [{}]", body);
                 let s = body.to_string();
                 consumer.ack(delivery).unwrap();
                 Some(s)
