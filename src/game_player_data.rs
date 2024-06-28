@@ -14,6 +14,7 @@ pub(crate) struct GamePlayerData {
     pub(crate) declined_en_passants: u8,
 }
 
+#[allow(unused)]
 impl GamePlayerData {
     pub(crate) fn new() -> GamePlayerData {
         GamePlayerData {
@@ -36,7 +37,7 @@ impl GamePlayerData {
     fn check_move(&mut self, pos: &Chess, m: &Move) {
         let is_en_passant = m.is_en_passant();
         let mut board_copy = pos.clone();
-        board_copy.play_unchecked(&m);
+        board_copy.play_unchecked(m);
         let is_en_passant_mate = board_copy.is_checkmate() & is_en_passant;
         self.en_passant_mates += is_en_passant_mate as u8;
         self.en_passants += is_en_passant as u8;

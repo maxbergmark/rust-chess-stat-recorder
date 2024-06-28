@@ -16,7 +16,7 @@ impl FirstMove {
         FirstMove {
             count: 0,
             game_link: String::new(),
-            first_played: 4_000_000_000,
+            first_played: u32::MAX,
         }
     }
 
@@ -32,7 +32,7 @@ impl FirstMove {
     pub(crate) fn merge(&mut self, other: &FirstMove) {
         self.count += other.count;
         if other.first_played < self.first_played {
-            self.game_link = other.game_link.clone();
+            self.game_link.clone_from(&other.game_link);
             self.first_played = other.first_played;
         }
     }
@@ -51,8 +51,8 @@ impl Validator {
             games: 0,
             move_counter: HashMap::new(),
             game: Game {
-                index: 0,
-                pos: Chess::default(),
+                // index: 0,
+                position: Chess::default(),
                 sans: Vec::new(),
                 success: true,
                 game_data: GameData::new(),
@@ -69,17 +69,19 @@ impl Visitor for Validator {
     }
 
     fn header(&mut self, key: &[u8], value: RawHeader<'_>) {
+        let game_data = &mut self.game.game_data;
+        let v = value.as_bytes();
         match key {
-            b"WhiteElo" => self.game.game_data.white_player.set_elo(&value.as_bytes()),
-            b"BlackElo" => self.game.game_data.black_player.set_elo(&value.as_bytes()),
-            b"White" => self.game.game_data.white_player.set_name(&value.as_bytes()),
-            b"Black" => self.game.game_data.black_player.set_name(&value.as_bytes()),
-            b"Event" => self.game.game_data.parse_time_control(&value.as_bytes()),
-            b"Result" => self.game.game_data.parse_result(&value.as_bytes()),
-            b"Termination" => self.game.game_data.parse_termination(&value.as_bytes()),
-            b"Site" => self.game.game_data.parse_site(&value.as_bytes()),
-            b"UTCDate" => self.game.game_data.parse_date(&value.as_bytes()),
-            b"UTCTime" => self.game.game_data.parse_time(&value.as_bytes()),
+            b"WhiteElo" => game_data.white_player.set_elo(v),
+            b"BlackElo" => game_data.black_player.set_elo(v),
+            b"White" => game_data.white_player.set_name(v),
+            b"Black" => game_data.black_player.set_name(v),
+            b"Event" => game_data.parse_time_control(v),
+            b"Result" => game_data.parse_result(v),
+            b"Termination" => game_data.parse_termination(v),
+            b"Site" => game_data.parse_site(v),
+            b"UTCDate" => game_data.parse_date(v),
+            b"UTCTime" => game_data.parse_time(v),
             _ => {}
         }
     }
@@ -110,8 +112,8 @@ impl Visitor for Validator {
         mem::replace(
             &mut self.game,
             Game {
-                index: self.games,
-                pos: Chess::default(),
+                // index: self.games,
+                position: Chess::default(),
                 sans: Vec::with_capacity(80),
                 success: true,
                 game_data: GameData::new(),

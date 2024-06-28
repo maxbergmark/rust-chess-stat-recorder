@@ -23,10 +23,17 @@ impl GameData {
             black_player: GamePlayerData::new(),
             start_time: 0,
             game_link: [0; 8],
-            time_control: TimeControl::RatedStandardGame,
+            time_control: TimeControl::StandardGame,
             result: GameResult::Unfinished,
             termination: Termination::Unterminated,
             half_moves: 0,
+        }
+    }
+
+    pub(crate) fn get_player_data(&mut self, half_move_number: usize) -> &mut GamePlayerData {
+        match half_move_number % 2 {
+            0 => &mut self.white_player,
+            _ => &mut self.black_player,
         }
     }
 
@@ -55,30 +62,40 @@ impl GameData {
 
     pub(crate) fn parse_time_control(&mut self, value: &[u8]) {
         let s = std::str::from_utf8(value).unwrap();
-        let l = s.split(" ").collect::<Vec<&str>>();
+        let l = s.split(' ').collect::<Vec<&str>>();
 
         self.time_control = match l[..] {
             ["Rated", speed, "game"] => match speed {
-                "Correspondence" => TimeControl::RatedCorrespondenceGame,
-                "Classical" => TimeControl::RatedClassicalGame,
-                "Standard" => TimeControl::RatedStandardGame,
-                "Rapid" => TimeControl::RatedRapidGame,
-                "Blitz" => TimeControl::RatedBlitzGame,
-                "Bullet" => TimeControl::RatedBulletGame,
-                "UltraBullet" => TimeControl::RatedUltraBulletGame,
+                "Correspondence" => TimeControl::CorrespondenceGame,
+                "Classical" => TimeControl::ClassicalGame,
+                "Standard" => TimeControl::StandardGame,
+                "Rapid" => TimeControl::RapidGame,
+                "Blitz" => TimeControl::BlitzGame,
+                "Bullet" => TimeControl::BulletGame,
+                "UltraBullet" => TimeControl::UltraBulletGame,
                 _ => unimplemented!(),
             },
             ["Rated", speed, "tournament", _] => match speed {
-                "Correspondence" => TimeControl::RatedCorrespondenceTournament,
-                "Classical" => TimeControl::RatedClassicalTournament,
-                "Standard" => TimeControl::RatedStandardTournament,
-                "Rapid" => TimeControl::RatedRapidTournament,
-                "Blitz" => TimeControl::RatedBlitzTournament,
-                "Bullet" => TimeControl::RatedBulletTournament,
-                "UltraBullet" => TimeControl::RatedUltraBulletTournament,
+                "Correspondence" => TimeControl::CorrespondenceTournament,
+                "Classical" => TimeControl::ClassicalTournament,
+                "Standard" => TimeControl::StandardTournament,
+                "Rapid" => TimeControl::RapidTournament,
+                "Blitz" => TimeControl::BlitzTournament,
+                "Bullet" => TimeControl::BulletTournament,
+                "UltraBullet" => TimeControl::UltraBulletTournament,
                 _ => unimplemented!(),
             },
-            _ => unimplemented!(),
+            [speed, "swiss", _] => match speed {
+                "Correspondence" => TimeControl::CorrespondenceTournament,
+                "Classical" => TimeControl::ClassicalTournament,
+                "Standard" => TimeControl::StandardTournament,
+                "Rapid" => TimeControl::RapidTournament,
+                "Blitz" => TimeControl::BlitzTournament,
+                "Bullet" => TimeControl::BulletTournament,
+                "UltraBullet" => TimeControl::UltraBulletTournament,
+                _ => unimplemented!(),
+            },
+            _ => unimplemented!("Time control: {}", s),
         };
     }
 
@@ -91,7 +108,7 @@ impl GameData {
         let s = std::str::from_utf8(value).unwrap();
         let date = NaiveDate::parse_from_str(s, "%Y.%m.%d").expect(s);
         let datetime = date.and_hms_opt(0, 0, 0).unwrap();
-        self.start_time += datetime.timestamp() as u32;
+        self.start_time += datetime.and_utc().timestamp() as u32;
     }
 
     pub(crate) fn parse_time(&mut self, value: &[u8]) {
