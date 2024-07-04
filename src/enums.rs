@@ -1,6 +1,6 @@
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 #[repr(u8)]
-pub(crate) enum GameResult {
+pub enum GameResult {
     WhiteWin = 1,
     BlackWin = 2,
     Draw = 3,
@@ -9,7 +9,7 @@ pub(crate) enum GameResult {
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
-pub(crate) enum Termination {
+pub enum Termination {
     Normal = 1,
     TimeForfeit = 2,
     Abandoned = 3,
@@ -19,7 +19,7 @@ pub(crate) enum Termination {
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
-pub(crate) enum TimeControl {
+pub enum TimeControl {
     CorrespondenceGame = 1,
     ClassicalGame = 2,
     StandardGame = 3,

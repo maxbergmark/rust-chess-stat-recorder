@@ -1,19 +1,34 @@
-// #![allow(unused)]
+#![warn(
+    keyword_idents,
+    missing_copy_implementations,
+    missing_debug_implementations,
+    non_ascii_idents,
+    noop_method_call,
+    unused_crate_dependencies,
+    unused_extern_crates,
+    unused_import_braces,
+    future_incompatible,
+    nonstandard_style,
+    // rust_2018_idioms,
+)]
 
-use file_util::from_file;
-use futures::future::join_all;
+use file_util::{from_file, to_local_filename, write_batch};
+use futures::{future::join_all, stream::FuturesUnordered, StreamExt, TryFutureExt};
+use game_data::GameData;
 use itertools::Itertools;
-use lichess_util::get_file_list;
+use lichess_util::{get_url_list, save_file};
+use plotting::Plotter;
 use std::{
+    fs::File,
     io::Read,
     sync::{Arc, Mutex},
 };
-use ui::UI;
 
-use error::ChessError;
+use error::{Error, ToCrateError};
 use game::Game;
 use pgn_reader::BufferedReader;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ui::{UserInterface, UI};
 use validator::Validator;
 
 mod enums;
@@ -23,81 +38,119 @@ mod game;
 mod game_data;
 mod game_player_data;
 mod lichess_util;
+mod plotting;
 mod ui;
 mod util;
 mod validator;
 
-fn to_local_filename(url: &str) -> String {
-    let parts = url.split('/').collect::<Vec<&str>>();
-    let filename = parts.last().unwrap();
-    format!("./data/{filename}")
+fn validate_and_log(game: Game, plotter: &Arc<Plotter>) -> Result<GameData, Error> {
+    let game_data = game.validate();
+    match game_data {
+        Ok(game_data) => {
+            Plotter::add_samples(&game_data, plotter)?;
+            Ok(game_data)
+        }
+        Err(e) => {
+            plotter.log_error(&format!("{e}"))?;
+            Err(Error::GameError)
+        }
+    }
 }
 
 fn parse_batch(
     chunk: impl Iterator<Item = Game>,
-    filename: &String,
-    progress: &mut u64,
-    ui: Arc<Mutex<UI>>,
-) {
+    output_file: &mut File,
+    plotter: &Arc<Plotter>,
+) -> Result<u64, Error> {
     let games: Vec<Game> = chunk.collect();
     let data = games
         .into_par_iter()
-        .flat_map(Game::validate)
+        .flat_map(|game| validate_and_log(game, plotter))
         .collect::<Vec<_>>();
-    *progress += data.len() as u64;
-    if *progress % 10000 == 0 {
-        ui.lock().unwrap().update_progress(filename, *progress);
-        ui.lock().unwrap().update().unwrap();
-    }
+
+    write_batch(output_file, &data)?;
+    Ok(data.len() as u64)
 }
 
-fn parse_all_games(filename: String, game_stream: BufferedReader<impl Read>, ui: Arc<Mutex<UI>>) {
-    ui.lock().unwrap().add_file(&filename);
-    ui.lock().unwrap().update().unwrap();
+fn parse_all_games(
+    filename: &str,
+    game_stream: BufferedReader<impl Read>,
+    ui: &Arc<Mutex<UI>>,
+    plotter: &Arc<Plotter>,
+) -> Result<(), Error> {
     let mut validator = Validator::new();
     let mut progress = 0;
+    let mut output_file = util::get_output_file(filename).map_err(Error::FileError)?;
 
     game_stream
         .into_iter(&mut validator)
         .flatten()
-        .chunks(1000)
+        .chunks(10000)
         .into_iter()
-        .for_each(|chunk| parse_batch(chunk, &filename, &mut progress, ui.clone()));
+        .try_for_each(|chunk| {
+            progress += parse_batch(chunk, &mut output_file, plotter)?;
+            UI::update_progress(ui, filename, progress)?;
+            plotter.update().to_chess_error(Error::PlottingError)
+        })
+        .inspect_err(|e| UI::set_error(ui, filename, e))?;
 
-    ui.lock().unwrap().complete_file(&filename, progress);
-    ui.lock().unwrap().update().unwrap();
+    UI::complete_file(ui, filename, progress)
 }
 
-async fn parse_file(filename: &str, ui: Arc<Mutex<UI>>) -> Result<(), ChessError> {
-    if !filename.contains("2013-") && !filename.contains("2014-") {
+async fn parse_file(url: &str, ui: &Arc<Mutex<UI>>, plotter: &Arc<Plotter>) -> Result<(), Error> {
+    if !url.contains("2013-")
+        && !url.contains("2014-")
+        && !url.contains("2015-")
+        && !url.contains("2016-")
+        && !url.contains("2017-")
+        && !url.contains("2018-")
+        && !url.contains("2019-")
+    {
         return Ok(());
     }
 
-    let filename = to_local_filename(filename);
+    let filename = to_local_filename(url)?;
+    let callback = |progress: u64| {
+        UI::set_downloading(ui, &filename)?;
+        UI::update_progress(ui, &filename, progress)
+    };
+    UI::add_file(ui, &filename)?;
+    if !std::path::Path::new(&filename).exists() {
+        save_file(url, &filename, callback).await?;
+    }
+    UI::set_processing(ui, &filename)?;
     let game_stream = from_file(&filename).await?;
 
-    tokio::task::block_in_place(|| {
-        parse_all_games(filename, game_stream, ui);
-    });
-    Ok(())
+    tokio::task::block_in_place(|| parse_all_games(&filename, game_stream, ui, plotter))
 }
 
 #[tokio::main]
-async fn main() -> Result<(), ChessError> {
-    let ui = UI::new().map_err(|_| ChessError::UIError)?;
-    let ui_mutex = Arc::new(Mutex::new(ui));
+async fn main() -> Result<(), Error> {
+    let plotter = Plotter::new_arc()?;
+    let ui = UI::new_arc()?;
 
-    let futures = get_file_list().await?.into_iter().map(|filename| {
-        let ui_mutex = ui_mutex.clone();
-        tokio::spawn(async move {
-            parse_file(&filename, ui_mutex).await.unwrap();
-        })
-    });
-    join_all(futures).await;
-    ui_mutex
-        .lock()
-        .unwrap()
-        .exit()
-        .map_err(|_| ChessError::UIError)?;
+    let mut futures = FuturesUnordered::new();
+
+    for url in get_url_list().await? {
+        let ui = ui.clone();
+        let plotter = plotter.clone();
+        let future = tokio::spawn(async move { parse_file(&url, &ui, &plotter).await })
+            .map_err(|_| Error::TokioError);
+
+        futures.push(future);
+        if futures.len() >= 10 {
+            futures.next().await;
+        }
+    }
+    join_all(futures)
+        .await
+        .into_iter()
+        .flatten()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    ui.lock()
+        .map_err(|_| Error::UIError)?
+        .wait_for_exit()
+        .map_err(|_| Error::UIError)?;
     Ok(())
 }
