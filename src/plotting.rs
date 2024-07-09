@@ -1,5 +1,6 @@
 use atomic_time::AtomicInstant;
 use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
@@ -21,7 +22,9 @@ pub struct Plotter {
 
 impl Plotter {
     fn new() -> Result<Self> {
-        let rec = rerun::RecordingStreamBuilder::new("rerun_example_bar_chart").spawn()?;
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 10, 135)), 8080);
+        let rec = rerun::RecordingStreamBuilder::new("rerun_example_bar_chart")
+            .connect_opts(addr, Some(Duration::from_secs(1)))?;
 
         Ok(Self {
             rec,
