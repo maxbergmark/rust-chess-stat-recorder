@@ -1,37 +1,40 @@
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 #[repr(u8)]
-pub(crate) enum GameResult {
+pub enum GameResult {
     WhiteWin = 1,
     BlackWin = 2,
     Draw = 3,
+    #[default]
     Unfinished = 4,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(u8)]
-pub(crate) enum Termination {
+pub enum Termination {
     Normal = 1,
     TimeForfeit = 2,
     Abandoned = 3,
+    #[default]
     Unterminated = 4,
     RulesInfraction = 5,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(u8)]
-pub(crate) enum TimeControl {
-    RatedCorrespondenceGame = 1,
-    RatedClassicalGame = 2,
-    RatedStandardGame = 3,
-    RatedRapidGame = 4,
-    RatedBlitzGame = 5,
-    RatedBulletGame = 6,
-    RatedUltraBulletGame = 7,
-    RatedCorrespondenceTournament = 10,
-    RatedClassicalTournament = 11,
-    RatedStandardTournament = 12,
-    RatedRapidTournament = 13,
-    RatedBlitzTournament = 14,
-    RatedBulletTournament = 15,
-    RatedUltraBulletTournament = 16,
+pub enum TimeControl {
+    CorrespondenceGame = 1,
+    ClassicalGame = 2,
+    #[default]
+    StandardGame = 3,
+    RapidGame = 4,
+    BlitzGame = 5,
+    BulletGame = 6,
+    UltraBulletGame = 7,
+    CorrespondenceTournament = 10,
+    ClassicalTournament = 11,
+    StandardTournament = 12,
+    RapidTournament = 13,
+    BlitzTournament = 14,
+    BulletTournament = 15,
+    UltraBulletTournament = 16,
 }

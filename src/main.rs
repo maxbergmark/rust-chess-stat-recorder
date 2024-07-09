@@ -1,16 +1,48 @@
+#![warn(
+    // missing_docs,
+    // unreachable_pub,
+    keyword_idents,
+    missing_copy_implementations,
+    missing_debug_implementations,
+    non_ascii_idents,
+    noop_method_call,
+    unused_crate_dependencies,
+    unused_extern_crates,
+    unused_import_braces,
+    future_incompatible,
+    nonstandard_style,
+    bad_style,
+    dead_code,
+    improper_ctypes,
+    non_shorthand_field_patterns,
+    no_mangle_generic_items,
+    overflowing_literals,
+    path_statements,
+    patterns_in_fns_without_body,
+    unconditional_recursion,
+    unused,
+    unused_allocation,
+    unused_comparisons,
+    unused_parens,
+    while_true,
+)]
+
 mod enums;
+mod error;
+mod file_util;
 mod game;
 mod game_data;
 mod game_player_data;
-mod helpers;
-mod multichannel_parser;
-mod parallel_parser;
-mod rabbitmq_handler;
+mod lichess_util;
+mod parser;
+mod plotting;
+mod ui;
+mod util;
 mod validator;
 
-use crate::multichannel_parser::MultiChannelParser;
+pub use error::{Error, Result};
 
-fn main() {
-    let parser = MultiChannelParser::new(2, 4);
-    parser.start_consumer();
+#[tokio::main]
+async fn main() -> Result<()> {
+    parser::run_all_files().await
 }
