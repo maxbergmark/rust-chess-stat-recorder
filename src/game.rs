@@ -4,9 +4,8 @@ use crate::game_data::GameData;
 use shakmaty::san::{San, SanError};
 use shakmaty::{Chess, Position};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Game {
-    pub position: Chess,
     pub sans: Vec<San>,
     pub success: bool,
     pub data: GameData,
@@ -14,12 +13,11 @@ pub struct Game {
 
 impl Game {
     pub fn validate(mut self) -> Result<GameData, Error> {
+        let mut position = Chess::default();
         self.sans
             .iter()
             .enumerate()
-            .try_for_each(|(half_move_number, san)| {
-                Self::parse_move(&mut self.position, &mut self.data, half_move_number, san)
-            })?;
+            .try_for_each(|(ply, san)| Self::parse_move(&mut position, &mut self.data, ply, san))?;
         self.data.half_moves = self.sans.len() as u16;
         Ok(self.data)
     }
@@ -27,16 +25,18 @@ impl Game {
     fn parse_move(
         position: &mut Chess,
         game_data: &mut GameData,
-        half_move_number: usize,
+        ply: usize,
         san: &San,
     ) -> Result<(), Error> {
         let m = san
             .to_move(position)
             .map_err(|err| to_error(game_data, san, err))?;
-        let is_winner = Self::check_is_winner(game_data.result, half_move_number);
-        let player_data = game_data.get_player_data(half_move_number);
+        let is_winner = Self::check_is_winner(game_data.result, ply);
+        // if is_double_disambiguation(san) {
+        // game_data.add_double_disambiguation(ply);
+        // }
 
-        player_data.analyze_position(position, &m, is_winner);
+        game_data.analyze_position(position, ply, &m, is_winner);
         position.play_unchecked(&m);
         Ok(())
     }

@@ -1,7 +1,10 @@
+use pgn_reader::San;
 use shakmaty::{Chess, Move, Position};
 use std::cmp::min;
 
-#[derive(Debug, Copy, Clone)]
+use crate::{util::is_double_disambiguation, Error};
+
+#[derive(Debug, Copy, Clone, Default)]
 #[repr(C)]
 pub struct GamePlayerData {
     pub name: [u8; 20],
@@ -12,55 +15,11 @@ pub struct GamePlayerData {
     pub missed_en_passant_mates: u8,
     pub en_passants: u8,
     pub declined_en_passants: u8,
+    pub double_disambiguation_checkmates: u8,
 }
 
-#[allow(unused)]
 impl GamePlayerData {
-    pub const fn new() -> Self {
-        Self {
-            name: [0; 20],
-            elo: 0,
-            missed_mates: 0,
-            missed_wins: 0,
-            en_passant_mates: 0,
-            missed_en_passant_mates: 0,
-            en_passants: 0,
-            declined_en_passants: 0,
-        }
-    }
-
-    pub fn analyze_position(&mut self, pos: &Chess, m: &Move, is_winner: bool) {
-        self.check_move(pos, m);
-        self.check_possible_moves(pos, m, is_winner);
-    }
-
-    fn check_move(&mut self, pos: &Chess, m: &Move) {
-        let is_en_passant = m.is_en_passant();
-        let mut board_copy = pos.clone();
-        board_copy.play_unchecked(m);
-        let is_en_passant_mate = board_copy.is_checkmate() & is_en_passant;
-        self.en_passant_mates += u8::from(is_en_passant_mate);
-        self.en_passants += u8::from(is_en_passant);
-    }
-
-    fn check_possible_moves(&mut self, pos: &Chess, m: &Move, is_winner: bool) {
-        let mut board_copy = pos.clone();
-        board_copy.play_unchecked(m);
-        let is_checkmate = board_copy.is_checkmate();
-        self.check_other_moves(pos, m, is_winner, is_checkmate);
-    }
-
-    fn check_other_moves(&mut self, pos: &Chess, m: &Move, is_winner: bool, is_checkmate: bool) {
-        pos.legal_moves()
-            .iter()
-            .filter(|&possible_move| !possible_move.eq(m))
-            .for_each(|possible_move| {
-                self.check_other_move(pos.clone(), possible_move, is_winner, is_checkmate);
-                self.check_declined_en_passant(m, possible_move);
-            });
-    }
-
-    fn check_other_move(
+    pub fn check_other_move(
         &mut self,
         mut pos: Chess,
         possible_move: &Move,
@@ -77,16 +36,33 @@ impl GamePlayerData {
         }
     }
 
-    fn check_declined_en_passant(&mut self, m: &Move, possible_move: &Move) {
+    pub fn check_declined_en_passant(&mut self, m: &Move, possible_move: &Move) {
         if possible_move.is_en_passant() && !m.is_en_passant() {
             self.declined_en_passants += 1;
         }
     }
 
+    pub fn check_double_disambiguation(&mut self, position: &Chess, possible_move: &Move) {
+        if Self::is_interesting_move(possible_move) {
+            let san = San::from_move(position, possible_move);
+            if is_double_disambiguation(&san) {
+                let mut position = position.clone();
+                position.play_unchecked(possible_move);
+                if position.is_checkmate() {
+                    self.double_disambiguation_checkmates += 1;
+                }
+            }
+        }
+    }
+
+    fn is_interesting_move(m: &Move) -> bool {
+        m.is_capture() && (m.role() == shakmaty::Role::Bishop || m.role() == shakmaty::Role::Knight)
+    }
+
     pub fn set_elo(&mut self, value: &[u8]) {
         self.elo = std::str::from_utf8(value)
-            .map_err(|_| ())
-            .and_then(|s| s.parse::<i16>().map_err(|_| ()))
+            .map_err(Error::Utf8)
+            .and_then(|s| s.parse::<i16>().map_err(Error::ParseInt))
             .unwrap_or(0);
     }
 

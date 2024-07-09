@@ -26,21 +26,21 @@ use ratatui::{
     Frame, Terminal,
 };
 
-use crate::error::Error;
+use crate::{util::Progress, Error, Result};
 
 pub trait UserInterface {
-    // fn new() -> Result<Self, io::Error>;
     fn add_file(&mut self, filename: &str);
     fn set_downloading(&mut self, filename: &str);
     fn set_processing(&mut self, filename: &str);
-    fn hide_file(&mut self, filename: &str) -> Result<(), io::Error>;
+    fn hide_file(&mut self, filename: &str) -> Result<()>;
     fn set_error(&mut self, filename: &str, err: &Error);
-    fn update_progress(&mut self, filename: &str, progress: u64) -> Result<(), io::Error>;
-    fn complete_file(&mut self, filename: &str, progress: u64) -> Result<(), io::Error>;
-    fn wait_for_exit(&mut self) -> Result<(), io::Error>;
-    fn exit(&mut self) -> Result<(), io::Error>;
+    fn update_progress(&mut self, filename: &str, progress: Progress) -> Result<()>;
+    fn complete_file(&mut self, filename: &str, progress: Progress) -> Result<()>;
+    fn wait_for_exit(&mut self) -> Result<()>;
+    fn exit(&mut self) -> Result<()>;
 }
 
+#[derive(Debug)]
 pub enum UI {
     BoxUI(BoxUI),
     Empty,
@@ -73,78 +73,73 @@ pub enum FileStatus {
     Hidden,
 }
 
-#[allow(unused)]
 impl UI {
-    pub fn new() -> Result<Self, io::Error> {
+    pub fn new() -> Result<Self> {
         BoxUI::new().map(UI::BoxUI)
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    pub const fn new_empty() -> Result<Self, io::Error> {
+    #[allow(unused)]
+    pub const fn new_empty() -> Result<Self> {
         Ok(Self::Empty)
     }
 
-    pub fn new_arc() -> Result<Arc<Mutex<Self>>, Error> {
-        Self::new()
-            .map(Mutex::new)
-            .map(Arc::new)
-            .map_err(|_| Error::UIError)
+    pub fn new_arc() -> Result<Arc<Mutex<Self>>> {
+        Self::new().map(Mutex::new).map(Arc::new)
     }
 
     fn perform_ui_action(
         ui_mutex: &Arc<Mutex<Self>>,
-        action: impl FnOnce(&mut Self) -> Result<(), std::io::Error>,
-    ) -> Result<(), Error> {
-        ui_mutex
-            .lock()
-            .map_err(|_| Error::UIError)
-            .and_then(|mut ui| action(&mut ui).map_err(|_| Error::UIError))
+        action: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<()> {
+        let mut ui = ui_mutex.lock()?;
+        action(&mut ui)
     }
 
     pub fn update_progress(
         ui_mutex: &Arc<Mutex<Self>>,
         filename: &str,
-        progress: u64,
-    ) -> Result<(), Error> {
+        progress: Progress,
+    ) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| ui.update_progress(filename, progress))
     }
 
     pub fn complete_file(
         ui_mutex: &Arc<Mutex<Self>>,
         filename: &str,
-        progress: u64,
-    ) -> Result<(), Error> {
+        progress: Progress,
+    ) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| ui.complete_file(filename, progress))?;
         thread::sleep(Duration::from_secs(5));
         Self::perform_ui_action(ui_mutex, |ui| ui.hide_file(filename))
     }
 
-    pub fn set_downloading(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<(), Error> {
+    pub fn set_downloading(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| {
             ui.set_downloading(filename);
             Ok(())
         })
     }
 
-    pub fn set_processing(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<(), Error> {
+    pub fn set_processing(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| {
             ui.set_processing(filename);
             Ok(())
         })
     }
 
-    pub fn add_file(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<(), Error> {
+    pub fn add_file(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| {
             ui.add_file(filename);
             Ok(())
         })
     }
 
-    pub fn set_error(ui_mutex: &Arc<Mutex<Self>>, filename: &str, err: &Error) {
+    pub fn set_error(ui_mutex: &Arc<Mutex<Self>>, filename: &str, err: &Error) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| {
             ui.set_error(filename, err);
             Ok(())
-        });
+        })
     }
 }
 
@@ -173,7 +168,7 @@ impl UserInterface for UI {
         }
     }
 
-    fn hide_file(&mut self, filename: &str) -> Result<(), io::Error> {
+    fn hide_file(&mut self, filename: &str) -> Result<()> {
         if let Self::BoxUI(ui) = self {
             ui.hide_file(filename)
         } else {
@@ -181,7 +176,7 @@ impl UserInterface for UI {
         }
     }
 
-    fn update_progress(&mut self, filename: &str, progress: u64) -> Result<(), io::Error> {
+    fn update_progress(&mut self, filename: &str, progress: Progress) -> Result<()> {
         if let Self::BoxUI(ui) = self {
             ui.update_progress(filename, progress)
         } else {
@@ -189,7 +184,7 @@ impl UserInterface for UI {
         }
     }
 
-    fn complete_file(&mut self, filename: &str, progress: u64) -> Result<(), io::Error> {
+    fn complete_file(&mut self, filename: &str, progress: Progress) -> Result<()> {
         if let Self::BoxUI(ui) = self {
             ui.complete_file(filename, progress)
         } else {
@@ -197,15 +192,14 @@ impl UserInterface for UI {
         }
     }
 
-    fn wait_for_exit(&mut self) -> Result<(), io::Error> {
+    fn wait_for_exit(&mut self) -> Result<()> {
         match self {
             Self::BoxUI(ui) => ui.wait_for_exit(),
             Self::Empty => Ok(()),
         }
     }
 
-    #[allow(dead_code)]
-    fn exit(&mut self) -> Result<(), io::Error> {
+    fn exit(&mut self) -> Result<()> {
         match self {
             Self::BoxUI(ui) => ui.exit(),
             Self::Empty => Ok(()),
@@ -214,7 +208,7 @@ impl UserInterface for UI {
 }
 
 impl BoxUI {
-    pub fn new() -> Result<Self, io::Error> {
+    pub fn new() -> Result<Self> {
         let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
         Self::setup()?;
         Ok(Self {
@@ -224,15 +218,14 @@ impl BoxUI {
         })
     }
 
-    fn setup() -> Result<(), io::Error> {
+    fn setup() -> Result<()> {
         enable_raw_mode()?;
-        // clear the screen
         stdout().execute(Clear(ClearType::All))?;
         stdout().execute(EnterAlternateScreen)?;
         Ok(())
     }
 
-    fn update(&mut self) -> Result<(), io::Error> {
+    fn update(&mut self) -> Result<()> {
         if self.last_update.elapsed().as_millis() < 500 {
             return Ok(());
         }
@@ -348,22 +341,26 @@ impl UserInterface for BoxUI {
         }
     }
 
-    fn hide_file(&mut self, filename: &str) -> Result<(), io::Error> {
+    fn hide_file(&mut self, filename: &str) -> Result<()> {
         if let Some(file_info) = self.file_info.get_mut(filename) {
             file_info.status = FileStatus::Hidden;
         }
         self.update()
     }
 
-    fn update_progress(&mut self, filename: &str, progress: u64) -> Result<(), io::Error> {
+    fn update_progress(&mut self, filename: &str, progress: Progress) -> Result<()> {
         if let Some(file_info) = self.file_info.get_mut(filename) {
-            file_info.progress = progress;
-            file_info.speed = progress as f64 / file_info.start_time.elapsed().as_secs_f64();
+            let p = match file_info.status {
+                FileStatus::Waiting | FileStatus::Downloading => progress.bytes,
+                _ => progress.games,
+            };
+            file_info.progress = p;
+            file_info.speed = p as f64 / file_info.start_time.elapsed().as_secs_f64();
         }
         self.update()
     }
 
-    fn complete_file(&mut self, filename: &str, progress: u64) -> Result<(), io::Error> {
+    fn complete_file(&mut self, filename: &str, progress: Progress) -> Result<()> {
         self.update_progress(filename, progress)?;
         if let Some(file_info) = self.file_info.get_mut(filename) {
             file_info.status = FileStatus::Done;
@@ -371,7 +368,7 @@ impl UserInterface for BoxUI {
         self.update()
     }
 
-    fn wait_for_exit(&mut self) -> Result<(), io::Error> {
+    fn wait_for_exit(&mut self) -> Result<()> {
         self.update()?;
         while !handle_events()? {
             thread::sleep(std::time::Duration::from_millis(500));
@@ -379,14 +376,12 @@ impl UserInterface for BoxUI {
         self.exit()
     }
 
-    fn exit(&mut self) -> Result<(), io::Error> {
+    fn exit(&mut self) -> Result<()> {
         disable_raw_mode()?;
         stdout().execute(LeaveAlternateScreen)?;
         self.terminal.show_cursor()?;
         self.terminal.clear()?;
-        // exit the program
         std::process::exit(0);
-        // Ok(())
     }
 }
 

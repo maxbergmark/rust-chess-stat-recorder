@@ -8,34 +8,32 @@ use pgn_reader::BufferedReader;
 use tokio::io::AsyncRead;
 use tokio_util::io::SyncIoBridge;
 
-use crate::{
-    error::{Error, ToCrateError},
-    game_data::GameData,
-};
+use crate::{game_data::GameData, Error, Result};
 
-pub fn to_local_filename(url: &str) -> Result<String, Error> {
-    let parts = url.split('/').collect::<Vec<&str>>();
-    let filename = parts.last().ok_or(Error::InvalidFilename)?;
+pub fn to_local_filename(url: &str) -> Result<String> {
+    let filename = url.split('/').last().ok_or(Error::InvalidFilename)?;
     Ok(format!("./data/{filename}"))
 }
 
-pub async fn from_file(filename: &str) -> Result<BufferedReader<impl Read>, Error> {
-    tokio::fs::File::open(filename)
+async fn open_file(filename: &str) -> Result<tokio::fs::File> {
+    Ok(tokio::fs::File::open(filename).await?)
+}
+
+pub async fn from_file(filename: &str) -> Result<BufferedReader<impl Read>> {
+    open_file(filename)
         .await // this is AsyncRead
-        .map_err(Error::FileError)
-        // .to_chess_error(ChessError::FileError)
         .and_then(to_buffered_reader)
 }
 
-fn to_buffered_reader(reader: impl AsyncRead + Unpin) -> Result<BufferedReader<impl Read>, Error> {
+fn to_buffered_reader(reader: impl AsyncRead + Unpin) -> Result<BufferedReader<impl Read>> {
     let bridge = SyncIoBridge::new(reader); //  this is Read
-    let decoder = zstd::Decoder::new(bridge).to_chess_error(Error::DecompressionError)?;
+    let decoder = zstd::Decoder::new(bridge)?;
     Ok(BufferedReader::new(decoder))
 }
 
-pub fn write_batch(file: &mut File, v: &[GameData]) -> Result<(), Error> {
+pub fn write_batch(file: &mut File, v: &[GameData]) -> Result<()> {
     let p = v.as_ptr().cast();
     let l = std::mem::size_of_val(v);
     let d = unsafe { slice::from_raw_parts(p, l) };
-    file.write_all(d).map_err(Error::FileError)
+    Ok(file.write_all(d)?)
 }

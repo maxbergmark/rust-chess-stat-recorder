@@ -20,6 +20,7 @@ atomic-time = "0.1.5"
 backoff = {version = "0.4.0", features = ["tokio"]}
 # amiquip = "0.4.2"
 chrono = "0.4.23"
+derive_more = {version = "0.99.18", features = ["from"]}
 # core_affinity = "0.8.0"
 # crossbeam = "0.8.2"
 futures = "0.3.30"
@@ -40,7 +41,7 @@ name = "rust-chess-stat-recorder"
 path = "src/main.rs"
 
 [lints.clippy]
-# map_err_ignore = "warn"
+map_err_ignore = "warn"
 # missing_docs_in_private_items = "warn"
 
 all = { level = "warn", priority = -1 }

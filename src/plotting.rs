@@ -7,11 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    error::{Error, ToCrateError},
-    game_data::GameData,
-    game_player_data::GamePlayerData,
-};
+use crate::{game_data::GameData, game_player_data::GamePlayerData, Error, Result};
 
 pub struct Plotter {
     rec: rerun::RecordingStream,
@@ -24,10 +20,8 @@ pub struct Plotter {
 }
 
 impl Plotter {
-    fn new() -> Result<Self, Error> {
-        let rec = rerun::RecordingStreamBuilder::new("rerun_example_bar_chart")
-            .spawn()
-            .to_chess_error(Error::PlottingError)?;
+    fn new() -> Result<Self> {
+        let rec = rerun::RecordingStreamBuilder::new("rerun_example_bar_chart").spawn()?;
 
         Ok(Self {
             rec,
@@ -52,14 +46,23 @@ impl Plotter {
         );
     }
 
-    pub fn add_samples(game_data: &GameData, plotter: &Self) -> Result<(), Error> {
+    pub fn add_samples(game_data: &GameData, plotter: &Self) -> Result<()> {
         Self::add_player_samples(&game_data.white_player, plotter);
         Self::add_player_samples(&game_data.black_player, plotter);
         Self::add_sample(&plotter.half_moves_hist, game_data.half_moves as i16);
 
-        if game_data.is_en_passant_mate() {
-            plotter.log(
-                &format!("En passant mate: {}", game_data.get_formatted_game_link()?),
+        // if game_data.is_en_passant_mate() {
+        //     plotter.info(
+        //         &format!("En passant mate: {}", game_data.get_formatted_game_link()?),
+        //         None,
+        //     )?;
+        // }
+        if game_data.has_double_disambiguation() {
+            plotter.info(
+                &format!(
+                    "Double disambiguation: {}",
+                    game_data.get_formatted_game_link()?
+                ),
                 None,
             )?;
         }
@@ -70,7 +73,7 @@ impl Plotter {
         (0..n).map(|_| AtomicI64::new(0)).collect()
     }
 
-    pub fn new_arc() -> Result<std::sync::Arc<Self>, Error> {
+    pub fn new_arc() -> Result<std::sync::Arc<Self>> {
         Self::new().map(Arc::new)
     }
 
@@ -88,7 +91,7 @@ impl Plotter {
         histogram[bucket].fetch_add(val.into(), std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn update(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn update(&self) -> Result<()> {
         let prev = self.last_update.load(Ordering::Relaxed);
         if prev.elapsed() < Duration::from_millis(100) {
             return Ok(());
@@ -129,26 +132,36 @@ impl Plotter {
         histogram: &[AtomicI64],
         elo_buckets: &[f64],
         name: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         let buckets = Self::to_buckets(histogram);
         let buckets = Self::percentage(&buckets, elo_buckets);
         self.plot(&buckets, name)
     }
 
-    fn plot(&self, buckets: &Vec<f64>, name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn plot(&self, buckets: &Vec<f64>, name: &str) -> Result<()> {
         let chart = rerun::BarChart::new(buckets.as_slice());
         self.rec.log(name, &chart)?;
         Ok(())
     }
 
-    pub fn log(&self, message: &str, level: Option<&str>) -> Result<(), Error> {
+    pub fn info(&self, message: &str, level: Option<&str>) -> Result<()> {
         let level = level.unwrap_or(rerun::TextLogLevel::INFO);
-        self.rec
-            .log("logs", &rerun::TextLog::new(message).with_level(level))
-            .to_chess_error(Error::PlottingError)
+        let log = rerun::TextLog::new(message).with_level(level);
+        Ok(self.rec.log("logs", &log)?)
     }
 
-    pub fn log_error(&self, message: &str) -> Result<(), Error> {
-        self.log(message, Some(rerun::TextLogLevel::ERROR))
+    pub fn error(&self, message: &str) -> Result<()> {
+        self.info(message, Some(rerun::TextLogLevel::ERROR))
     }
+
+    pub fn log_error(&self, err: &Error) -> Result<()> {
+        self.error(&err.to_string())
+    }
+    // pub fn log_error(&self, err: Error) -> Error {
+    //     let r = self.error(&err.to_string());
+    //     match r {
+    //         Ok(()) => err,
+    //         Err(e) => e,
+    //     }
+    // }
 }

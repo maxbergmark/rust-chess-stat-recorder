@@ -1,8 +1,7 @@
-use crate::error::{Error, ToCrateError};
+use crate::error::Result;
 use crate::game::Game;
 use crate::game_data::GameData;
 use pgn_reader::{RawHeader, SanPlus, Skip, Visitor};
-use shakmaty::Chess;
 use std::collections::HashMap;
 use std::mem;
 
@@ -21,12 +20,10 @@ impl FirstMove {
         }
     }
 
-    fn update(&mut self, game_link: [u8; 8], start_time: u32) -> Result<(), Error> {
+    fn update(&mut self, game_link: [u8; 8], start_time: u32) -> Result<()> {
         self.count += 1;
         if start_time < self.first_played {
-            self.game_link = std::str::from_utf8(&game_link)
-                .to_chess_error(Error::ParsingError(game_link.to_vec()))?
-                .to_string();
+            self.game_link = std::str::from_utf8(&game_link)?.to_string();
             self.first_played = start_time;
         }
         Ok(())
@@ -43,7 +40,6 @@ impl FirstMove {
 
 pub struct Validator {
     games: i64,
-    // pub move_counter: HashMap<SanPlus, u64>,
     pub move_counter: HashMap<SanPlus, FirstMove>,
     game: Game,
 }
@@ -54,11 +50,8 @@ impl Validator {
             games: 0,
             move_counter: HashMap::new(),
             game: Game {
-                // index: 0,
-                position: Chess::default(),
-                sans: Vec::new(),
                 success: true,
-                data: GameData::new(),
+                ..Default::default()
             },
         }
     }
@@ -105,7 +98,6 @@ impl Visitor for Validator {
 
     fn san(&mut self, san_plus: SanPlus) {
         if self.game.success {
-            // *self.move_counter.entry(san_plus.clone()).or_insert(0) += 1;
             self.move_counter
                 .entry(san_plus.clone())
                 .or_insert(FirstMove::new())
@@ -123,11 +115,9 @@ impl Visitor for Validator {
         mem::replace(
             &mut self.game,
             Game {
-                // index: self.games,
-                position: Chess::default(),
                 sans: Vec::with_capacity(80),
                 success: true,
-                data: GameData::new(),
+                data: GameData::default(),
             },
         )
     }
