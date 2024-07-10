@@ -29,11 +29,9 @@
 
 mod enums;
 mod error;
-mod file_util;
 mod game;
 mod game_data;
 mod game_player_data;
-mod lichess_util;
 mod parser;
 mod plotting;
 mod ui;

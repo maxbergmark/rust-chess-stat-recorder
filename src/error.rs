@@ -9,7 +9,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, From)]
 pub enum Error {
     InvalidMove(SanError, String),
-    InvalidFilename,
+    InvalidFilename(String),
     #[from]
     ParseString(String),
     #[from]
@@ -42,7 +42,7 @@ impl Display for Error {
             Self::InvalidMove(err, move_san) => {
                 write!(f, "Invalid move: {err} for move {move_san}")
             }
-            Self::InvalidFilename => write!(f, "Invalid filename"),
+            Self::InvalidFilename(s) => write!(f, "Invalid filename: {s}"),
             Self::ParseString(s) => write!(f, "Parsing error: {s}"),
             Self::ParseBuffer(buffer) => {
                 write!(f, "Parsing error: [{}]", comma_separated(buffer))

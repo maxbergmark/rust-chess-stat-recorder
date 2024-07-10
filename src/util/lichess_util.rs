@@ -13,17 +13,25 @@ use reqwest::{Client, Response};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tokio_util::bytes::Bytes;
 
-use crate::{util::to_game_stream, Result};
+use crate::Result;
 
-pub async fn get_url_list() -> Result<Vec<String>> {
-    let filename = "https://database.lichess.org/standard/list.txt";
+use super::{file_util::FileInfo, helpers::to_game_stream};
+
+pub async fn get_file_list() -> Result<Vec<FileInfo>> {
+    let filename = "https://database.lichess.org/standard/counts.txt";
 
     let filenames = reqwest::get(filename)
         .and_then(Response::text)
+        .map_ok(|s| s.trim().to_string())
         .map_ok(|s| split_lines(&s))
         .await?;
 
-    Ok(filenames)
+    let file_infos = filenames
+        .into_iter()
+        .map(|s| s.parse())
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(file_infos)
 }
 
 fn split_lines(s: &str) -> Vec<String> {
@@ -77,7 +85,6 @@ fn to_byte_stream(
     response.bytes_stream().map_err(convert_error)
 }
 
-// #[allow(clippy::needless_pass_by_value)]
 fn convert_error(_: reqwest::Error) -> std::io::Error {
     std::io::Error::new(ErrorKind::BrokenPipe, "network error")
 }

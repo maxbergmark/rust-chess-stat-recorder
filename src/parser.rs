@@ -9,13 +9,14 @@ use std::{
 };
 
 use crate::{
-    file_util::{from_file, to_local_filename, write_batch},
     game::Game,
     game_data::GameData,
-    lichess_util::{get_url_list, save_file},
     plotting::Plotter,
     ui::{UserInterface, UI},
-    util::{get_output_file, AndThenErr, Progress},
+    util::{
+        from_file, get_file_list, get_output_file, save_file, write_batch, AndThenErr, FileInfo,
+        Progress,
+    },
     validator::Validator,
     Result,
 };
@@ -69,27 +70,31 @@ fn parse_all_games(
     UI::complete_file(ui, filename, progress)
 }
 
-async fn parse_file(url: &str, ui: &Arc<Mutex<UI>>, plotter: &Arc<Plotter>) -> Result<()> {
-    if !url.contains("2013-")
-        && !url.contains("2014-")
-        && !url.contains("2015-")
-        && !url.contains("2016-")
-        && !url.contains("2017-")
-        && !url.contains("2018-")
-        && !url.contains("2019-")
-        && !url.contains("2020-")
+async fn parse_file(
+    file_info: FileInfo,
+    ui: &Arc<Mutex<UI>>,
+    plotter: &Arc<Plotter>,
+) -> Result<()> {
+    if file_info.year != 2013
+    // && file_info.year != 2014
+    // && file_info.year != 2015
+    // && file_info.year != 2016
+    // && file_info.year != 2017
+    // && file_info.year != 2018
+    // && file_info.year != 2019
+    // && file_info.year != 2020
     {
         return Ok(());
     }
 
-    let filename = to_local_filename(url)?;
+    let filename = file_info.filename.clone();
     let callback = |bytes: u64| {
         UI::set_downloading(ui, &filename)?;
         UI::update_progress(ui, &filename, Progress::from_bytes(bytes))
     };
-    UI::add_file(ui, &filename)?;
+    UI::add_file(ui, &file_info)?;
     if !std::path::Path::new(&filename).exists() {
-        save_file(url, &filename, callback).await?;
+        save_file(&file_info.url, &filename, callback).await?;
     }
     UI::set_processing(ui, &filename)?;
     let game_stream = from_file(&filename).await?;
@@ -98,11 +103,11 @@ async fn parse_file(url: &str, ui: &Arc<Mutex<UI>>, plotter: &Arc<Plotter>) -> R
 }
 
 fn spawn_parse_file(
-    url: String,
+    file_info: FileInfo,
     ui: Arc<Mutex<UI>>,
     plotter: Arc<Plotter>,
 ) -> tokio::task::JoinHandle<Result<()>> {
-    tokio::spawn(async move { parse_file(&url, &ui, &plotter).await })
+    tokio::spawn(async move { parse_file(file_info, &ui, &plotter).await })
 }
 
 async fn push_until_full(
@@ -110,7 +115,7 @@ async fn push_until_full(
     future: tokio::task::JoinHandle<Result<()>>,
 ) {
     futures.push(future);
-    if futures.len() >= 10 {
+    if futures.len() >= 12 {
         futures.next().await;
     }
 }
@@ -131,8 +136,8 @@ pub async fn run_all_files() -> Result<()> {
 
     let mut futures = FuturesUnordered::new();
 
-    for url in get_url_list().await? {
-        let future = spawn_parse_file(url, ui.clone(), plotter.clone());
+    for file_info in get_file_list().await? {
+        let future = spawn_parse_file(file_info, ui.clone(), plotter.clone());
         push_until_full(&mut futures, future).await;
     }
 
