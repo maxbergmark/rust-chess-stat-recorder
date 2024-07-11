@@ -27,16 +27,12 @@
     while_true,
 )]
 
-mod enums;
 mod error;
-mod game;
-mod game_data;
-mod game_player_data;
+mod game_parser;
 mod parser;
-mod plotting;
+mod plotter;
 mod ui;
 mod util;
-mod validator;
 
 pub use error::{Error, Result};
 

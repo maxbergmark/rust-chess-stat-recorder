@@ -9,7 +9,7 @@ use pgn_reader::BufferedReader;
 use tokio::io::AsyncRead;
 use tokio_util::io::SyncIoBridge;
 
-use crate::{game_data::GameData, Error, Result};
+use crate::{game_parser::GameData, Error, Result};
 
 // counts: lichess_db_standard_rated_2013-01.pgn.zst 1
 // list:   https://database.lichess.org/standard/lichess_db_standard_rated_2024-06.pgn.zst

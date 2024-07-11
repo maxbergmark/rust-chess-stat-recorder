@@ -1,8 +1,9 @@
-use crate::enums::GameResult;
 use crate::error::Error;
-use crate::game_data::GameData;
 use shakmaty::san::{San, SanError};
 use shakmaty::{Chess, Position};
+
+use super::enums::GameResult;
+use super::GameData;
 
 #[derive(Debug, Default)]
 pub struct Game {

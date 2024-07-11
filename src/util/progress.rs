@@ -1,6 +1,6 @@
 use derive_more::AddAssign;
 
-use crate::game_data::GameData;
+use crate::game_parser::GameData;
 
 #[derive(Debug, Default, Copy, Clone, AddAssign)]
 pub struct Progress {

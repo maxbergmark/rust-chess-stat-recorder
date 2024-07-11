@@ -4,7 +4,7 @@ use std::{
     io::Read,
 };
 
-use crate::{validator::FirstMove, Result};
+use crate::{game_parser::FirstMove, Result};
 
 use futures::Stream;
 use itertools::Itertools;

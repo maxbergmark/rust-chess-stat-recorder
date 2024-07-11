@@ -1,6 +1,5 @@
 use crate::error::Result;
-use crate::game::Game;
-use crate::game_data::GameData;
+use crate::game_parser::{Game, GameData};
 use pgn_reader::{RawHeader, SanPlus, Skip, Visitor};
 use std::collections::HashMap;
 use std::mem;

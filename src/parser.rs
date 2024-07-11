@@ -9,15 +9,14 @@ use std::{
 };
 
 use crate::{
-    game::Game,
-    game_data::GameData,
-    plotting::Plotter,
+    game_parser::Validator,
+    game_parser::{Game, GameData},
+    plotter::Plotter,
     ui::{UserInterface, UI},
     util::{
         from_file, get_file_list, get_output_file, save_file, write_batch, AndThenErr, FileInfo,
         Progress,
     },
-    validator::Validator,
     Result,
 };
 

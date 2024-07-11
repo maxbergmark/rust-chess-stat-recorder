@@ -8,7 +8,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{game_data::GameData, game_player_data::GamePlayerData, Error, Result};
+use crate::{
+    game_parser::{GameData, GamePlayerData},
+    Error, Result,
+};
 
 pub struct Plotter {
     rec: rerun::RecordingStream,
@@ -161,11 +164,4 @@ impl Plotter {
     pub fn log_error(&self, err: &Error) -> Result<()> {
         self.error(&err.to_string())
     }
-    // pub fn log_error(&self, err: Error) -> Error {
-    //     let r = self.error(&err.to_string());
-    //     match r {
-    //         Ok(()) => err,
-    //         Err(e) => e,
-    //     }
-    // }
 }

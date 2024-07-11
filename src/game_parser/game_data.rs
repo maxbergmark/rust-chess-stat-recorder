@@ -1,9 +1,12 @@
 use chrono::naive::{NaiveDate, NaiveTime};
 use shakmaty::{Chess, Move, Position};
 
-use crate::enums::{GameResult, Termination, TimeControl};
 use crate::error::Error;
-use crate::game_player_data::GamePlayerData;
+
+use super::{
+    enums::{GameResult, Termination, TimeControl},
+    GamePlayerData,
+};
 
 #[derive(Debug, Copy, Clone, Default)]
 #[repr(C)]
