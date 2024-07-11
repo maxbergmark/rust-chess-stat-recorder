@@ -5,6 +5,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::{
     fs::File,
     io::Read,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -74,27 +75,19 @@ async fn parse_file(
     ui: &Arc<Mutex<UI>>,
     plotter: &Arc<Plotter>,
 ) -> Result<()> {
-    if file_info.year != 2013
-    // && file_info.year != 2014
-    // && file_info.year != 2015
-    // && file_info.year != 2016
-    // && file_info.year != 2017
-    // && file_info.year != 2018
-    // && file_info.year != 2019
-    // && file_info.year != 2020
-    {
+    if file_info.year > 2013 {
         return Ok(());
     }
 
     let filename = file_info.filename.clone();
-    let callback = |bytes: u64| {
-        UI::set_downloading(ui, &filename)?;
-        UI::update_progress(ui, &filename, Progress::from_bytes(bytes))
-    };
+    let callback = |bytes: u64| UI::update_progress(ui, &filename, Progress::from_bytes(bytes));
+
     UI::add_file(ui, &file_info)?;
-    if !std::path::Path::new(&filename).exists() {
+    if !Path::new(&filename).exists() {
+        UI::set_downloading(ui, &filename)?;
         save_file(&file_info.url, &filename, callback).await?;
     }
+
     UI::set_processing(ui, &filename)?;
     let game_stream = from_file(&filename).await?;
 

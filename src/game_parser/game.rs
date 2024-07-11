@@ -33,9 +33,6 @@ impl Game {
             .to_move(position)
             .map_err(|err| to_error(game_data, san, err))?;
         let is_winner = Self::check_is_winner(game_data.result, ply);
-        // if is_double_disambiguation(san) {
-        // game_data.add_double_disambiguation(ply);
-        // }
 
         game_data.analyze_position(position, ply, &m, is_winner);
         position.play_unchecked(&m);
