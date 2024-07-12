@@ -1,0 +1,8 @@
+rerun_ip = [192, 168, 10, 135]
+years = [2013, 2014, 2015]
+output_data = true
+
+[logs]
+en_passant_mates = false
+double_disambiguation_checkmates = true
+double_disambiguation_capture_checkmates = true

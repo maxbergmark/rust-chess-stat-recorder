@@ -27,6 +27,7 @@
     while_true,
 )]
 
+mod config;
 mod error;
 mod game_parser;
 mod parser;

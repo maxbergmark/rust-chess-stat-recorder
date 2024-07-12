@@ -16,6 +16,7 @@ pub struct GamePlayerData {
     pub en_passants: u8,
     pub declined_en_passants: u8,
     pub double_disambiguation_checkmates: u8,
+    pub double_disambiguation_capture_checkmates: u8,
 }
 
 impl GamePlayerData {
@@ -49,14 +50,18 @@ impl GamePlayerData {
                 let mut position = position.clone();
                 position.play_unchecked(possible_move);
                 if position.is_checkmate() {
-                    self.double_disambiguation_checkmates += 1;
+                    if possible_move.is_capture() {
+                        self.double_disambiguation_capture_checkmates += 1;
+                    } else {
+                        self.double_disambiguation_checkmates += 1;
+                    }
                 }
             }
         }
     }
 
     fn is_interesting_move(m: &Move) -> bool {
-        m.is_capture() && (m.role() == shakmaty::Role::Bishop || m.role() == shakmaty::Role::Knight)
+        m.role() == shakmaty::Role::Bishop || m.role() == shakmaty::Role::Knight
     }
 
     pub fn set_elo(&mut self, value: &[u8]) {

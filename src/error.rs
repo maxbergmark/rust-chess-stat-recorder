@@ -26,6 +26,8 @@ pub enum Error {
     ParseDate(chrono::format::ParseError),
     #[from]
     Plotting(RecordingStreamError),
+    #[from]
+    Toml(toml::de::Error),
 }
 
 impl<T> From<PoisonError<T>> for Error {
@@ -54,6 +56,7 @@ impl Display for Error {
             Self::Reqwest(e) => write!(f, "Reqwest error: {e}"),
             Self::ParseDate(e) => write!(f, "Date parse error: {e}"),
             Self::Plotting(e) => write!(f, "Plotting error: {e}"),
+            Self::Toml(e) => write!(f, "Toml error: {e}"),
         }?;
         Ok(())
     }

@@ -9,6 +9,7 @@ use std::{
 };
 
 use crate::{
+    config::Config,
     game_parser::{GameData, GamePlayerData},
     Error, Result,
 };
@@ -21,14 +22,16 @@ pub struct Plotter {
     declined_en_passant_hist: Vec<AtomicI64>,
     half_moves_hist: Vec<AtomicI64>,
     last_update: AtomicInstant,
+    // update_interval: Duration,
 }
 
 impl Plotter {
-    fn new() -> Result<Self> {
-        let _addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 10, 135)), 8080);
-        let rec = rerun::RecordingStreamBuilder::new("rerun_example_bar_chart_temp")
-            // .connect_opts(addr, Some(Duration::from_secs(1)))?;
-            .spawn()?;
+    fn new(rerun_ip: [u8; 4], port: Option<u16>) -> Result<Self> {
+        let port = port.unwrap_or(9876);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(rerun_ip)), port);
+        let rec = rerun::RecordingStreamBuilder::new("chess_analysis")
+            .connect_opts(addr, Some(Duration::from_secs(1)))?;
+        // .spawn()?;
 
         Ok(Self {
             rec,
@@ -53,21 +56,36 @@ impl Plotter {
         );
     }
 
-    pub fn add_samples(game_data: &GameData, plotter: &Self) -> Result<()> {
+    pub fn add_samples(game_data: &GameData, plotter: &Self, config: &Config) -> Result<()> {
         Self::add_player_samples(&game_data.white_player, plotter);
         Self::add_player_samples(&game_data.black_player, plotter);
         Self::add_sample(&plotter.half_moves_hist, game_data.half_moves as i16);
 
-        // if game_data.is_en_passant_mate() {
-        //     plotter.info(
-        //         &format!("En passant mate: {}", game_data.get_formatted_game_link()?),
-        //         None,
-        //     )?;
-        // }
-        if game_data.has_double_disambiguation() {
+        if config.logs.en_passant_mates && game_data.is_en_passant_mate() {
+            plotter.info(
+                &format!("En passant mate: {}", game_data.get_formatted_game_link()?),
+                None,
+            )?;
+        }
+
+        if config.logs.double_disambiguation_checkmates
+            && game_data.has_double_disambiguation_checkmate()
+        {
             plotter.info(
                 &format!(
-                    "Double disambiguation: {}",
+                    "Double disambiguation checkmate: {}",
+                    game_data.get_formatted_game_link()?
+                ),
+                None,
+            )?;
+        }
+
+        if config.logs.double_disambiguation_capture_checkmates
+            && game_data.has_double_disambiguation_capture_checkmate()
+        {
+            plotter.info(
+                &format!(
+                    "Double disambiguation capture checkmate: {}",
                     game_data.get_formatted_game_link()?
                 ),
                 None,
@@ -80,8 +98,8 @@ impl Plotter {
         (0..n).map(|_| AtomicI64::new(0)).collect()
     }
 
-    pub fn new_arc() -> Result<std::sync::Arc<Self>> {
-        Self::new().map(Arc::new)
+    pub fn new_arc(rerun_ip: [u8; 4], port: Option<u16>) -> Result<std::sync::Arc<Self>> {
+        Self::new(rerun_ip, port).map(Arc::new)
     }
 
     pub fn add_sample(histogram: &[AtomicI64], val: impl Into<i64>) {
@@ -100,7 +118,7 @@ impl Plotter {
 
     pub fn update(&self) -> Result<()> {
         let prev = self.last_update.load(Ordering::Relaxed);
-        if prev.elapsed() < Duration::from_millis(100) {
+        if prev.elapsed() < Duration::from_millis(5000) {
             return Ok(());
         }
         self.last_update.store(Instant::now(), Ordering::Relaxed);

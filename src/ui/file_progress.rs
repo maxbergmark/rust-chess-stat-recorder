@@ -42,6 +42,14 @@ impl FileProgress {
         self.progress.games as f64 / elapsed
     }
 
+    pub fn download_speed(&self) -> f64 {
+        let elapsed = self.start_time.elapsed().as_secs_f64();
+        if elapsed == 0.0 {
+            return 0.0;
+        }
+        self.progress.bytes as f64 / elapsed
+    }
+
     pub fn move_speed(&self) -> f64 {
         let elapsed = self.start_time.elapsed().as_secs_f64();
         if elapsed == 0.0 {

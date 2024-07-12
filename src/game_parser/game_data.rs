@@ -72,9 +72,14 @@ impl GameData {
         self.white_player.en_passant_mates > 0 || self.black_player.en_passant_mates > 0
     }
 
-    pub const fn has_double_disambiguation(&self) -> bool {
+    pub const fn has_double_disambiguation_checkmate(&self) -> bool {
         self.white_player.double_disambiguation_checkmates > 0
             || self.black_player.double_disambiguation_checkmates > 0
+    }
+
+    pub const fn has_double_disambiguation_capture_checkmate(&self) -> bool {
+        self.white_player.double_disambiguation_capture_checkmates > 0
+            || self.black_player.double_disambiguation_capture_checkmates > 0
     }
 
     pub fn get_formatted_game_link(&self) -> Result<String, Error> {

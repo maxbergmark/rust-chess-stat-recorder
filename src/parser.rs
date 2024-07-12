@@ -10,8 +10,8 @@ use std::{
 };
 
 use crate::{
-    game_parser::Validator,
-    game_parser::{Game, GameData},
+    config::Config,
+    game_parser::{Game, GameData, Validator},
     plotter::Plotter,
     ui::{UserInterface, UI},
     util::{
@@ -21,10 +21,10 @@ use crate::{
     Result,
 };
 
-fn validate_and_log(game: Game, plotter: &Arc<Plotter>) -> Result<GameData> {
+fn validate_and_log(game: Game, plotter: &Arc<Plotter>, config: &Config) -> Result<GameData> {
     game.validate()
         .and_then(|game_data| {
-            Plotter::add_samples(&game_data, plotter)?;
+            Plotter::add_samples(&game_data, plotter, config)?;
             Ok(game_data)
         })
         .and_then_err(|e| plotter.log_error(e))
@@ -34,14 +34,17 @@ fn parse_batch(
     chunk: impl Iterator<Item = Game>,
     output_file: &mut File,
     plotter: &Arc<Plotter>,
+    config: &Config,
 ) -> Result<Progress> {
     let data = chunk
         .collect::<Vec<_>>()
         .into_par_iter()
-        .flat_map(|game| validate_and_log(game, plotter))
+        .flat_map(|game| validate_and_log(game, plotter, config))
         .collect::<Vec<_>>();
 
-    write_batch(output_file, &data)?;
+    if config.output_data {
+        write_batch(output_file, &data)?;
+    }
     Ok(data.into())
 }
 
@@ -50,6 +53,7 @@ fn parse_all_games(
     game_stream: BufferedReader<impl Read>,
     ui: &Arc<Mutex<UI>>,
     plotter: &Arc<Plotter>,
+    config: &Config,
 ) -> Result<()> {
     let mut validator = Validator::new();
     let mut progress = Progress::default();
@@ -61,7 +65,7 @@ fn parse_all_games(
         .chunks(10000)
         .into_iter()
         .try_for_each(|chunk| {
-            progress += parse_batch(chunk, &mut output_file, plotter)?;
+            progress += parse_batch(chunk, &mut output_file, plotter, config)?;
             UI::update_progress(ui, filename, progress)?;
             plotter.update()
         })
@@ -74,8 +78,9 @@ async fn parse_file(
     file_info: FileInfo,
     ui: &Arc<Mutex<UI>>,
     plotter: &Arc<Plotter>,
+    config: &Config,
 ) -> Result<()> {
-    if file_info.year > 2013 {
+    if !config.years.contains(&file_info.year) {
         return Ok(());
     }
 
@@ -91,15 +96,16 @@ async fn parse_file(
     UI::set_processing(ui, &filename)?;
     let game_stream = from_file(&filename).await?;
 
-    tokio::task::block_in_place(|| parse_all_games(&filename, game_stream, ui, plotter))
+    tokio::task::block_in_place(|| parse_all_games(&filename, game_stream, ui, plotter, config))
 }
 
 fn spawn_parse_file(
     file_info: FileInfo,
     ui: Arc<Mutex<UI>>,
     plotter: Arc<Plotter>,
+    config: Config,
 ) -> tokio::task::JoinHandle<Result<()>> {
-    tokio::spawn(async move { parse_file(file_info, &ui, &plotter).await })
+    tokio::spawn(async move { parse_file(file_info, &ui, &plotter, &config).await })
 }
 
 async fn push_until_full(
@@ -123,13 +129,14 @@ async fn collect(
 }
 
 pub async fn run_all_files() -> Result<()> {
-    let plotter = Plotter::new_arc()?;
+    let config = Config::from_file()?;
+    let plotter = Plotter::new_arc(config.rerun_ip, config.port)?;
     let ui = UI::new_arc()?;
 
     let mut futures = FuturesUnordered::new();
 
     for file_info in get_file_list().await? {
-        let future = spawn_parse_file(file_info, ui.clone(), plotter.clone());
+        let future = spawn_parse_file(file_info, ui.clone(), plotter.clone(), config.clone());
         push_until_full(&mut futures, future).await;
     }
 

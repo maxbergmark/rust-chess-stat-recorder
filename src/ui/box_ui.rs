@@ -151,26 +151,38 @@ fn create_filenames<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
 }
 
 fn create_progress<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
+    fn f(fp: &FileProgress) -> String {
+        match fp.status {
+            FileStatus::Waiting | FileStatus::Downloading => {
+                let p = 1e-6 * fp.progress.bytes as f64;
+                format!("{p:8.0} MB")
+            }
+            _ => {
+                let p = 100.0 * fp.progress.games as f64 / fp.file_info.num_games as f64;
+                format!("{p:8.2}%")
+            }
+        }
+    }
+
     fn reducer<'a>(file_info: &'a [&FileProgress]) -> Line<'a> {
         let p: u64 = file_info.iter().map(|fp| fp.progress.games).sum();
         let s = format!("{:>10} games", to_human(p as f64));
         Line::raw(s)
     }
 
-    create_paragraph(
-        files,
-        "Progress",
-        |fp| {
-            format!(
-                "{:8.2}%",
-                100.0 * fp.progress.games as f64 / fp.file_info.num_games as f64
-            )
-        },
-        reducer,
-    )
+    create_paragraph(files, "Progress", f, reducer)
 }
 
 fn create_speed<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
+    fn f(fp: &FileProgress) -> String {
+        match fp.status {
+            FileStatus::Waiting | FileStatus::Downloading => {
+                format!("{:8.0} MB/s", 1e-6 * fp.download_speed())
+            }
+            _ => format!("{:8.0} games/s", fp.speed()),
+        }
+    }
+
     fn reducer<'a>(files: &'a [&FileProgress]) -> Line<'a> {
         let p: f64 = files.iter().map(|fp| fp.progress.games as f64).sum();
         let t = get_elapsed_time(files);
@@ -178,12 +190,7 @@ fn create_speed<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
         Line::raw(s)
     }
 
-    create_paragraph(
-        files,
-        "Speed",
-        |fp| format!("{:8.0} games/s", fp.speed()),
-        reducer,
-    )
+    create_paragraph(files, "Speed", f, reducer)
 }
 
 fn create_move_variations<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
