@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     config::Config,
-    game_parser::{GameData, GamePlayerData},
+    game_parser::{GameData, GamePlayerData, MoveType, RareMoveWithLink},
     Error, Result,
 };
 
@@ -22,14 +22,14 @@ pub struct Plotter {
     declined_en_passant_hist: Vec<AtomicI64>,
     half_moves_hist: Vec<AtomicI64>,
     last_update: AtomicInstant,
-    // update_interval: Duration,
+    update_interval: Duration,
 }
 
 impl Plotter {
-    fn new(rerun_ip: [u8; 4], port: Option<u16>) -> Result<Self> {
-        let port = port.unwrap_or(9876);
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(rerun_ip)), port);
-        let rec = rerun::RecordingStreamBuilder::new("chess_analysis")
+    fn from_config(config: &Config) -> Result<Self> {
+        let port = config.port.unwrap_or(9876);
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(config.rerun_ip)), port);
+        let rec = rerun::RecordingStreamBuilder::new("chess_analysis_2013-2020")
             .connect_opts(addr, Some(Duration::from_secs(1)))?;
         // .spawn()?;
 
@@ -41,6 +41,7 @@ impl Plotter {
             declined_en_passant_hist: Self::get_vec(4000),
             half_moves_hist: Self::get_vec(602),
             last_update: AtomicInstant::now(),
+            update_interval: config.update_interval,
         })
     }
 
@@ -72,10 +73,7 @@ impl Plotter {
             && game_data.has_double_disambiguation_checkmate()
         {
             plotter.info(
-                &format!(
-                    "Double disambiguation checkmate: {}",
-                    game_data.get_formatted_game_link()?
-                ),
+                &format!("DD checkmate: {}", game_data.get_formatted_game_link()?),
                 None,
             )?;
         }
@@ -85,7 +83,7 @@ impl Plotter {
         {
             plotter.info(
                 &format!(
-                    "Double disambiguation capture checkmate: {}",
+                    "DD capture checkmate: {}",
                     game_data.get_formatted_game_link()?
                 ),
                 None,
@@ -94,12 +92,26 @@ impl Plotter {
         Ok(())
     }
 
+    pub fn log_rare_move(plotter: &Self, rare_move: &RareMoveWithLink) -> Result<()> {
+        let move_type = match rare_move.move_type {
+            MoveType::EnPassantMate => "EP ",
+            MoveType::DoubleDisambiguationCheckmate => "DD ",
+            MoveType::DoubleDisambiguationCaptureCheckmate => "DDx",
+        };
+        let message = format!(
+            "Rare move: ({:6} {} {})",
+            rare_move.san, move_type, rare_move.game_link
+        );
+        plotter.info(&message, None)?;
+        Ok(())
+    }
+
     fn get_vec(n: usize) -> Vec<AtomicI64> {
         (0..n).map(|_| AtomicI64::new(0)).collect()
     }
 
-    pub fn new_arc(rerun_ip: [u8; 4], port: Option<u16>) -> Result<std::sync::Arc<Self>> {
-        Self::new(rerun_ip, port).map(Arc::new)
+    pub fn new_arc(config: &Config) -> Result<std::sync::Arc<Self>> {
+        Self::from_config(config).map(Arc::new)
     }
 
     pub fn add_sample(histogram: &[AtomicI64], val: impl Into<i64>) {
@@ -118,7 +130,7 @@ impl Plotter {
 
     pub fn update(&self) -> Result<()> {
         let prev = self.last_update.load(Ordering::Relaxed);
-        if prev.elapsed() < Duration::from_millis(5000) {
+        if prev.elapsed() < self.update_interval {
             return Ok(());
         }
         self.last_update.store(Instant::now(), Ordering::Relaxed);

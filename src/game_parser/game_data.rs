@@ -5,10 +5,11 @@ use crate::error::Error;
 
 use super::{
     enums::{GameResult, Termination, TimeControl},
-    GamePlayerData,
+    game_player_data::RareMove,
+    GamePlayerData, MoveType,
 };
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 #[repr(C)]
 pub struct GameData {
     pub white_player: GamePlayerData,
@@ -22,10 +23,44 @@ pub struct GameData {
     pub half_moves: u16,
 }
 
+pub struct RareMoveWithLink {
+    pub game_link: String,
+    pub san: String,
+    pub move_type: MoveType,
+    // pub is_double_disambiguation: bool,
+    // pub is_capture: bool,
+}
+
+impl RareMoveWithLink {
+    pub fn new(game_link: String, rare_move: &RareMove) -> Self {
+        Self {
+            game_link,
+            san: rare_move.san.clone(),
+            move_type: rare_move.move_type.clone(),
+            // is_double_disambiguation: rare_move.is_double_disambiguation,
+            // is_capture: rare_move.is_capture,
+        }
+    }
+}
+
 impl GameData {
     pub fn analyze_position(&mut self, pos: &Chess, ply: usize, m: &Move, is_winner: bool) {
         self.check_move(pos, ply, m);
         self.check_possible_moves(pos, ply, m, is_winner);
+    }
+
+    pub fn get_rare_moves(&self) -> Vec<RareMoveWithLink> {
+        self.white_player
+            .rare_checkmates
+            .iter()
+            .chain(self.black_player.rare_checkmates.iter())
+            .map(move |rare_move| {
+                RareMoveWithLink::new(
+                    self.get_formatted_game_link().unwrap_or_default(),
+                    rare_move,
+                )
+            })
+            .collect()
     }
 
     fn check_move(&mut self, pos: &Chess, ply: usize, m: &Move) {
@@ -63,7 +98,6 @@ impl GameData {
             .for_each(|possible_move| {
                 player_data.check_other_move(pos.clone(), possible_move, is_winner, is_checkmate);
                 player_data.check_declined_en_passant(m, possible_move);
-                player_data.check_double_disambiguation(pos, possible_move);
             });
     }
 

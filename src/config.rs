@@ -1,15 +1,20 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use serde::Deserialize;
+use serde_with::serde_as;
 
 use crate::Result;
 
+#[serde_with::serde_as]
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     pub rerun_ip: [u8; 4],
     pub port: Option<u16>,
     pub years: HashSet<u32>,
     pub output_data: bool,
+    #[serde_as(as = "serde_with::DurationSeconds<u64>")]
+    #[serde(alias = "update_interval_seconds")]
+    pub update_interval: Duration,
     pub logs: Logs,
 }
 
@@ -38,6 +43,7 @@ mod tests {
 rerun_ip = [127, 0, 0, 1]
 years = [2013, 2014, 2015]
 output_data = true
+update_interval_seconds = 5
 
 [logs]
 en_passant_mates = true
@@ -51,5 +57,6 @@ double_disambiguation_capture_checkmates = true
         assert_eq!(config.port, None);
         assert_eq!(config.years.len(), 3);
         assert_eq!(config.years, [2013, 2014, 2015].into());
+        assert_eq!(config.update_interval, Duration::from_secs(5));
     }
 }

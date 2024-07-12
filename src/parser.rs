@@ -42,6 +42,10 @@ fn parse_batch(
         .flat_map(|game| validate_and_log(game, plotter, config))
         .collect::<Vec<_>>();
 
+    data.iter()
+        .flat_map(GameData::get_rare_moves)
+        .try_for_each(|rare_move| Plotter::log_rare_move(plotter, &rare_move))?;
+
     if config.output_data {
         write_batch(output_file, &data)?;
     }
@@ -85,12 +89,12 @@ async fn parse_file(
     }
 
     let filename = file_info.filename.clone();
+    let init = |file_size| UI::set_downloading(ui, &filename, file_size);
     let callback = |bytes: u64| UI::update_progress(ui, &filename, Progress::from_bytes(bytes));
 
     UI::add_file(ui, &file_info)?;
     if !Path::new(&filename).exists() {
-        UI::set_downloading(ui, &filename)?;
-        save_file(&file_info.url, &filename, callback).await?;
+        save_file(&file_info.url, &filename, init, callback).await?;
     }
 
     UI::set_processing(ui, &filename)?;
@@ -130,7 +134,7 @@ async fn collect(
 
 pub async fn run_all_files() -> Result<()> {
     let config = Config::from_file()?;
-    let plotter = Plotter::new_arc(config.rerun_ip, config.port)?;
+    let plotter = Plotter::new_arc(&config)?;
     let ui = UI::new_arc()?;
 
     let mut futures = FuturesUnordered::new();

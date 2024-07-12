@@ -1,3 +1,10 @@
+#[derive(Debug, Clone)]
+pub enum MoveType {
+    #[allow(unused)]
+    EnPassantMate,
+    DoubleDisambiguationCheckmate,
+    DoubleDisambiguationCaptureCheckmate,
+}
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 #[repr(u8)]
 pub enum GameResult {

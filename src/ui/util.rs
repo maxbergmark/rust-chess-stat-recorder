@@ -17,7 +17,7 @@ pub fn create_lines<'a>(files: &'a [&FileProgress], f: fn(&FileProgress) -> Line
 pub fn get_elapsed_time(files: &[&FileProgress]) -> f64 {
     let start_time = files
         .iter()
-        .map(|fi| fi.start_time)
+        .map(|fi| fi.initialization_time)
         .min()
         .unwrap_or_else(std::time::Instant::now);
     start_time.elapsed().as_secs_f64()
@@ -47,27 +47,6 @@ pub fn to_human(value: f64) -> String {
         .or_else(|| format_below_1000(value / 1e9, Some("G")))
         .or_else(|| format_below_1000(value / 1e12, Some("T")))
         .unwrap_or_else(|| format!("{:.1}T", value / 1e12))
-
-    // if value < 10.0 {
-    //     format!("{value:.3}")
-    // } else if value < 100.0 {
-    //     format!("{value:.2}")
-    // } else if value < 1000.0 {
-    //     format!("{value:.1}")
-    // } else {
-    //     let specifiers = "kMGTPEZY";
-    //     for specifier in specifiers.chars() {
-    //         value /= 1000.0;
-    //         if value < 10.0 {
-    //             return format!("{value:.3}{specifier}");
-    //         } else if value < 100.0 {
-    //             return format!("{value:.2}{specifier}");
-    //         } else if value < 1000.0 {
-    //             return format!("{value:.1}{specifier}");
-    //         }
-    //     }
-    //     format!("{value:.1}Y")
-    // }
 }
 
 #[cfg(test)]

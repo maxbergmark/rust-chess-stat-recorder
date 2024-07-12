@@ -4,7 +4,9 @@ use std::cmp::min;
 
 use crate::{util::is_double_disambiguation, Error};
 
-#[derive(Debug, Copy, Clone, Default)]
+use super::enums::MoveType;
+
+#[derive(Debug, Clone, Default)]
 #[repr(C)]
 pub struct GamePlayerData {
     pub name: [u8; 20],
@@ -17,23 +19,36 @@ pub struct GamePlayerData {
     pub declined_en_passants: u8,
     pub double_disambiguation_checkmates: u8,
     pub double_disambiguation_capture_checkmates: u8,
+    pub rare_checkmates: Vec<RareMove>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RareMove {
+    pub san: String,
+    pub move_type: MoveType,
+    // pub is_double_disambiguation: bool,
+    // pub is_capture: bool,
 }
 
 impl GamePlayerData {
     pub fn check_other_move(
         &mut self,
-        mut pos: Chess,
+        mut position: Chess,
         possible_move: &Move,
         is_winner: bool,
         is_checkmate: bool,
     ) {
-        pos.play_unchecked(possible_move);
-        if pos.is_checkmate() {
+        // let san = San::from_move(&position, possible_move);
+        let board_copy = position.clone();
+        position.play_unchecked(possible_move);
+        if position.is_checkmate() {
             self.missed_mates += !u16::from(is_checkmate);
             self.missed_wins += !u16::from(is_winner);
             if possible_move.is_en_passant() {
                 self.missed_en_passant_mates += 1;
             }
+
+            self.check_double_disambiguation(&board_copy, possible_move);
         }
     }
 
@@ -47,15 +62,16 @@ impl GamePlayerData {
         if Self::is_interesting_move(possible_move) {
             let san = San::from_move(position, possible_move);
             if is_double_disambiguation(&san) {
-                let mut position = position.clone();
-                position.play_unchecked(possible_move);
-                if position.is_checkmate() {
-                    if possible_move.is_capture() {
-                        self.double_disambiguation_capture_checkmates += 1;
+                self.rare_checkmates.push(RareMove {
+                    san: san.to_string(),
+                    move_type: if possible_move.is_capture() {
+                        MoveType::DoubleDisambiguationCaptureCheckmate
                     } else {
-                        self.double_disambiguation_checkmates += 1;
-                    }
-                }
+                        MoveType::DoubleDisambiguationCheckmate
+                    },
+                    // is_double_disambiguation: true,
+                    // is_capture: possible_move.is_capture(),
+                });
             }
         }
     }

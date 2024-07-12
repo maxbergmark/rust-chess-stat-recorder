@@ -13,7 +13,7 @@ use reqwest::{Client, Response};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tokio_util::bytes::Bytes;
 
-use crate::Result;
+use crate::{Error, Result};
 
 use super::{file_util::FileInfo, helpers::to_game_stream};
 
@@ -57,9 +57,12 @@ async fn retry_download(url: &str) -> Result<Response> {
 pub async fn save_file(
     url: &str,
     filename: &str,
+    init: impl FnOnce(u64) -> Result<()> + Send,
     callback: impl Fn(u64) -> Result<()> + Send,
 ) -> Result<()> {
     let response = retry_download(url).await?;
+    let size = response.content_length().ok_or(Error::NoContentLength)?;
+    init(size)?;
     let mut progress = 0;
     let mut file = File::create(filename).await?;
     let mut stream = response.bytes_stream().map_err(convert_error);

@@ -153,9 +153,10 @@ fn create_filenames<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
 fn create_progress<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
     fn f(fp: &FileProgress) -> String {
         match fp.status {
-            FileStatus::Waiting | FileStatus::Downloading => {
-                let p = 1e-6 * fp.progress.bytes as f64;
-                format!("{p:8.0} MB")
+            FileStatus::Waiting => String::default(),
+            FileStatus::Downloading { file_size, .. } => {
+                let p = 100.0 * fp.progress.bytes as f64 / file_size as f64;
+                format!("{p:8.2}%")
             }
             _ => {
                 let p = 100.0 * fp.progress.games as f64 / fp.file_info.num_games as f64;
@@ -176,8 +177,9 @@ fn create_progress<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
 fn create_speed<'a>(files: &'a [&FileProgress]) -> Paragraph<'a> {
     fn f(fp: &FileProgress) -> String {
         match fp.status {
-            FileStatus::Waiting | FileStatus::Downloading => {
-                format!("{:8.0} MB/s", 1e-6 * fp.download_speed())
+            FileStatus::Waiting => String::default(),
+            FileStatus::Downloading { .. } => {
+                format!("{:8.0} MB/s", 1e-6 * fp.speed())
             }
             _ => format!("{:8.0} games/s", fp.speed()),
         }
@@ -258,22 +260,27 @@ impl UserInterface for BoxUI {
             FileProgress {
                 file_info: file_info.clone(),
                 progress: Progress::default(),
-                start_time: Instant::now(),
+                initialization_time: Instant::now(),
                 status: FileStatus::Waiting,
                 message: None,
             },
         );
     }
 
-    fn set_downloading(&mut self, filename: &str) {
+    fn set_downloading(&mut self, filename: &str, file_size: u64) {
         if let Some(file_info) = self.file_info.get_mut(filename) {
-            file_info.status = FileStatus::Downloading;
+            file_info.status = FileStatus::Downloading {
+                file_size,
+                start_time: Instant::now(),
+            };
         }
     }
 
     fn set_processing(&mut self, filename: &str) {
         if let Some(file_info) = self.file_info.get_mut(filename) {
-            file_info.status = FileStatus::Processing;
+            file_info.status = FileStatus::Processing {
+                start_time: Instant::now(),
+            };
         }
     }
 
@@ -301,7 +308,11 @@ impl UserInterface for BoxUI {
     fn complete_file(&mut self, filename: &str, progress: Progress) -> Result<()> {
         self.update_progress(filename, progress)?;
         if let Some(file_info) = self.file_info.get_mut(filename) {
-            file_info.status = FileStatus::Done;
+            let processing_time = match file_info.status {
+                FileStatus::Processing { start_time } => start_time.elapsed(),
+                _ => Err(Error::Ui)?,
+            };
+            file_info.status = FileStatus::Done { processing_time };
         }
         self.update()
     }

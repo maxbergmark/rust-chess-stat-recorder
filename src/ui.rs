@@ -17,7 +17,7 @@ mod util;
 
 pub trait UserInterface {
     fn add_file(&mut self, file_info: &FileInfo);
-    fn set_downloading(&mut self, filename: &str);
+    fn set_downloading(&mut self, filename: &str, file_size: u64);
     fn set_processing(&mut self, filename: &str);
     fn hide_file(&mut self, filename: &str) -> Result<()>;
     fn set_error(&mut self, filename: &str, err: &Error);
@@ -72,9 +72,13 @@ impl UI {
         Self::perform_ui_action(ui_mutex, |ui| ui.hide_file(filename))
     }
 
-    pub fn set_downloading(ui_mutex: &Arc<Mutex<Self>>, filename: &str) -> Result<()> {
+    pub fn set_downloading(
+        ui_mutex: &Arc<Mutex<Self>>,
+        filename: &str,
+        file_size: u64,
+    ) -> Result<()> {
         Self::perform_ui_action(ui_mutex, |ui| {
-            ui.set_downloading(filename);
+            ui.set_downloading(filename, file_size);
             Ok(())
         })
     }
@@ -108,9 +112,9 @@ impl UserInterface for UI {
         }
     }
 
-    fn set_downloading(&mut self, filename: &str) {
+    fn set_downloading(&mut self, filename: &str, file_size: u64) {
         if let Self::BoxUI(ui) = self {
-            ui.set_downloading(filename);
+            ui.set_downloading(filename, file_size);
         }
     }
 

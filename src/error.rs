@@ -10,6 +10,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     InvalidMove(SanError, String),
     InvalidFilename(String),
+    NoContentLength,
     #[from]
     ParseString(String),
     #[from]
@@ -28,6 +29,7 @@ pub enum Error {
     Plotting(RecordingStreamError),
     #[from]
     Toml(toml::de::Error),
+    Ui,
 }
 
 impl<T> From<PoisonError<T>> for Error {
@@ -45,6 +47,7 @@ impl Display for Error {
                 write!(f, "Invalid move: {err} for move {move_san}")
             }
             Self::InvalidFilename(s) => write!(f, "Invalid filename: {s}"),
+            Self::NoContentLength => write!(f, "No content length"),
             Self::ParseString(s) => write!(f, "Parsing error: {s}"),
             Self::ParseBuffer(buffer) => {
                 write!(f, "Parsing error: [{}]", comma_separated(buffer))
@@ -57,6 +60,7 @@ impl Display for Error {
             Self::ParseDate(e) => write!(f, "Date parse error: {e}"),
             Self::Plotting(e) => write!(f, "Plotting error: {e}"),
             Self::Toml(e) => write!(f, "Toml error: {e}"),
+            Self::Ui => write!(f, "UI error"),
         }?;
         Ok(())
     }

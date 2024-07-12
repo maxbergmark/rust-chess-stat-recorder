@@ -8,8 +8,9 @@ use crate::{game_parser::FirstMove, Result};
 
 use futures::Stream;
 use itertools::Itertools;
-use pgn_reader::{BufferedReader, San, SanPlus};
+use pgn_reader::BufferedReader;
 use shakmaty::Role;
+use shakmaty::{san::San, san::SanPlus};
 use tokio_util::{
     bytes::Bytes,
     io::{StreamReader, SyncIoBridge},
@@ -17,7 +18,7 @@ use tokio_util::{
 
 pub const fn is_double_disambiguation(san: &San) -> bool {
     match san {
-        pgn_reader::San::Normal { file, rank, .. } => file.is_some() && rank.is_some(),
+        San::Normal { file, rank, .. } => file.is_some() && rank.is_some(),
         _ => false,
     }
 }
@@ -130,7 +131,6 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use pgn_reader::SanPlus;
     use shakmaty::{fen::Fen, san::San, CastlingMode, Chess, Role};
 
     type Result<T, E> = std::result::Result<T, E>;
@@ -153,14 +153,12 @@ mod tests {
         let fen: Fen = "8/2KN1p2/5p2/3N1B1k/5PNp/7P/7P/8 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
         let correct_san = "N5xf6#";
-        let incorrect_san = "Nd5xf6#";
 
         let san = San::from_str(&correct_san)?;
         let m = san.to_move(&position)?;
         let san_plus = SanPlus::from_move(position, &m);
 
-        // this fails, the actual value is "Nd5xf6#"
-        assert_eq!(san_plus.to_string(), incorrect_san);
+        assert_eq!(san_plus.to_string(), correct_san);
         Ok(())
     }
 
@@ -169,14 +167,12 @@ mod tests {
         let fen: Fen = "8/8/8/8/2n1n1p1/2n3P1/4nkP1/5n1K b - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
         let correct_san = "N4xg3#";
-        let incorrect_san = "Ne4xg3#";
 
         let san = San::from_str(&correct_san)?;
         let m = san.to_move(&position)?;
         let san_plus = SanPlus::from_move(position, &m);
 
-        // this fails, the actual value is "Ne4xg3#"
-        assert_eq!(san_plus.to_string(), incorrect_san);
+        assert_eq!(san_plus.to_string(), correct_san);
         Ok(())
     }
 }
