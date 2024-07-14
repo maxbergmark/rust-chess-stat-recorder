@@ -9,7 +9,10 @@ use pgn_reader::BufferedReader;
 use tokio::io::AsyncRead;
 use tokio_util::io::SyncIoBridge;
 
-use crate::{game_parser::GameData, Error, Result};
+use crate::{
+    game_parser::{GameData, RareMoveWithLink},
+    Error, Result,
+};
 
 // counts: lichess_db_standard_rated_2013-01.pgn.zst 1
 // list:   https://database.lichess.org/standard/lichess_db_standard_rated_2024-06.pgn.zst
@@ -84,6 +87,13 @@ pub fn write_batch(file: &mut File, v: &[GameData]) -> Result<()> {
     let l = std::mem::size_of_val(v);
     let d = unsafe { slice::from_raw_parts(p, l) };
     Ok(file.write_all(d)?)
+}
+
+pub fn write_moves(file: &mut File, v: &[RareMoveWithLink]) -> Result<()> {
+    v.iter().try_for_each(|rare_move| {
+        writeln!(file, "{rare_move}")?;
+        Ok(())
+    })
 }
 
 #[cfg(test)]

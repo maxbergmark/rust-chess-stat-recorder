@@ -11,6 +11,7 @@ pub enum Error {
     InvalidMove(SanError, String),
     InvalidFilename(String),
     NoContentLength,
+    CheckmateType,
     #[from]
     ParseString(String),
     #[from]
@@ -48,6 +49,7 @@ impl Display for Error {
             }
             Self::InvalidFilename(s) => write!(f, "Invalid filename: {s}"),
             Self::NoContentLength => write!(f, "No content length"),
+            Self::CheckmateType => write!(f, "Checkmate type"),
             Self::ParseString(s) => write!(f, "Parsing error: {s}"),
             Self::ParseBuffer(buffer) => {
                 write!(f, "Parsing error: [{}]", comma_separated(buffer))

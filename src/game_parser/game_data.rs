@@ -1,7 +1,9 @@
+use std::fmt::Display;
+
 use chrono::naive::{NaiveDate, NaiveTime};
 use shakmaty::{Chess, Move, Position};
 
-use crate::error::Error;
+use crate::Result;
 
 use super::{
     enums::{GameResult, Termination, TimeControl},
@@ -26,9 +28,24 @@ pub struct GameData {
 pub struct RareMoveWithLink {
     pub game_link: String,
     pub san: String,
+    pub ply: u16,
     pub move_type: MoveType,
-    // pub is_double_disambiguation: bool,
-    // pub is_capture: bool,
+}
+
+impl Display for RareMoveWithLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let move_number_str = format!(
+            "{:3}{}",
+            self.ply / 2 + 1,
+            if self.ply % 2 == 0 { ".  " } else { "..." }
+        );
+        let san_plus = format!("{}#", self.san);
+        write!(
+            f,
+            "{move_number_str} {san_plus:7},{},{}",
+            self.move_type, self.game_link
+        )
+    }
 }
 
 impl RareMoveWithLink {
@@ -36,9 +53,8 @@ impl RareMoveWithLink {
         Self {
             game_link,
             san: rare_move.san.clone(),
+            ply: rare_move.ply,
             move_type: rare_move.move_type.clone(),
-            // is_double_disambiguation: rare_move.is_double_disambiguation,
-            // is_capture: rare_move.is_capture,
         }
     }
 }
@@ -63,14 +79,21 @@ impl GameData {
             .collect()
     }
 
-    fn check_move(&mut self, pos: &Chess, ply: usize, m: &Move) {
+    fn check_move(&mut self, position: &Chess, ply: usize, m: &Move) {
         let is_en_passant = m.is_en_passant();
-        let mut board_copy = pos.clone();
+        let mut board_copy = position.clone();
         board_copy.play_unchecked(m);
-        let is_en_passant_mate = board_copy.is_checkmate() & is_en_passant;
+        let is_checkmate = board_copy.is_checkmate();
+        let is_en_passant_mate = is_checkmate & is_en_passant;
         let player_data = self.get_player_data(ply);
         player_data.en_passant_mates += u8::from(is_en_passant_mate);
         player_data.en_passants += u8::from(is_en_passant);
+        if is_checkmate {
+            if let Some(rare_move) = GamePlayerData::check_rare_move(position.clone(), m, ply, true)
+            {
+                player_data.rare_checkmates.push(rare_move);
+            }
+        }
     }
 
     fn check_possible_moves(&mut self, pos: &Chess, ply: usize, m: &Move, is_winner: bool) {
@@ -96,7 +119,13 @@ impl GameData {
             .iter()
             .filter(|&possible_move| !possible_move.eq(m))
             .for_each(|possible_move| {
-                player_data.check_other_move(pos.clone(), possible_move, is_winner, is_checkmate);
+                player_data.check_other_move(
+                    pos.clone(),
+                    possible_move,
+                    ply,
+                    is_winner,
+                    is_checkmate,
+                );
                 player_data.check_declined_en_passant(m, possible_move);
             });
     }
@@ -106,17 +135,7 @@ impl GameData {
         self.white_player.en_passant_mates > 0 || self.black_player.en_passant_mates > 0
     }
 
-    pub const fn has_double_disambiguation_checkmate(&self) -> bool {
-        self.white_player.double_disambiguation_checkmates > 0
-            || self.black_player.double_disambiguation_checkmates > 0
-    }
-
-    pub const fn has_double_disambiguation_capture_checkmate(&self) -> bool {
-        self.white_player.double_disambiguation_capture_checkmates > 0
-            || self.black_player.double_disambiguation_capture_checkmates > 0
-    }
-
-    pub fn get_formatted_game_link(&self) -> Result<String, Error> {
+    pub fn get_formatted_game_link(&self) -> Result<String> {
         Ok(format!(
             "https://lichess.org/{}",
             std::str::from_utf8(&self.game_link)?
@@ -130,7 +149,7 @@ impl GameData {
         }
     }
 
-    pub fn parse_result(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub fn parse_result(&mut self, value: &[u8]) -> Result<()> {
         let s = std::str::from_utf8(value)?;
         self.result = match s {
             "1-0" => GameResult::WhiteWin,
@@ -142,7 +161,7 @@ impl GameData {
         Ok(())
     }
 
-    pub fn parse_termination(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub fn parse_termination(&mut self, value: &[u8]) -> Result<()> {
         let s = std::str::from_utf8(value)?;
         self.termination = match s {
             "Normal" => Termination::Normal,
@@ -155,7 +174,7 @@ impl GameData {
         Ok(())
     }
 
-    pub fn parse_time_control(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub fn parse_time_control(&mut self, value: &[u8]) -> Result<()> {
         let s = std::str::from_utf8(value)?;
         let l = s.split(' ').collect::<Vec<&str>>();
 
@@ -168,7 +187,7 @@ impl GameData {
         Ok(())
     }
 
-    fn parse_rated_time_control(speed: &str) -> Result<TimeControl, Error> {
+    fn parse_rated_time_control(speed: &str) -> Result<TimeControl> {
         Ok(match speed {
             "Correspondence" => TimeControl::CorrespondenceGame,
             "Classical" => TimeControl::ClassicalGame,
@@ -181,7 +200,7 @@ impl GameData {
         })
     }
 
-    fn parse_tournament_time_control(speed: &str) -> Result<TimeControl, Error> {
+    fn parse_tournament_time_control(speed: &str) -> Result<TimeControl> {
         Ok(match speed {
             "Correspondence" => TimeControl::CorrespondenceTournament,
             "Classical" => TimeControl::ClassicalTournament,
@@ -199,7 +218,7 @@ impl GameData {
         self.game_link[..8].clone_from_slice(&value[l - 8..l]);
     }
 
-    pub fn parse_date(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub fn parse_date(&mut self, value: &[u8]) -> Result<()> {
         let s = std::str::from_utf8(value)?;
         let date = NaiveDate::parse_from_str(s, "%Y.%m.%d")?;
         let datetime = date.and_hms_opt(0, 0, 0).ok_or_else(|| value.to_vec())?;
@@ -207,11 +226,61 @@ impl GameData {
         Ok(())
     }
 
-    pub fn parse_time(&mut self, value: &[u8]) -> Result<(), Error> {
+    pub fn parse_time(&mut self, value: &[u8]) -> Result<()> {
         let s = std::str::from_utf8(value)?;
         let time = NaiveTime::parse_from_str(s, "%H:%M:%S")?;
         let midnight = NaiveTime::from_hms_opt(0, 0, 0).ok_or_else(|| value.to_vec())?;
         self.start_time += time.signed_duration_since(midnight).num_seconds() as u32;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::game_parser::enums::CheckType;
+
+    use super::*;
+
+    type Error = Box<dyn std::error::Error>;
+    type Result<T> = std::result::Result<T, Error>;
+
+    #[test]
+    fn test_display_rare_move() -> Result<()> {
+        let game_link = "https://lichess.org/123".to_string();
+        let rare_move = RareMove {
+            san: "Nf8e6".to_string(),
+            ply: 10,
+            move_type: MoveType::DoubleDisambiguationCheckmate {
+                was_played: true,
+                is_capture: false,
+                checkmate_type: CheckType::Double,
+            },
+        };
+        let rare_move_with_link = RareMoveWithLink::new(game_link, &rare_move);
+        assert_eq!(
+            rare_move_with_link.to_string(),
+            "  6.   Nf8e6# ,DD 2 ,https://lichess.org/123"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_display_rare_move_odd_ply() -> Result<()> {
+        let game_link = "https://lichess.org/123".to_string();
+        let rare_move = RareMove {
+            san: "Nf8e6".to_string(),
+            ply: 123,
+            move_type: MoveType::DoubleDisambiguationCheckmate {
+                was_played: true,
+                is_capture: false,
+                checkmate_type: CheckType::Double,
+            },
+        };
+        let rare_move_with_link = RareMoveWithLink::new(game_link, &rare_move);
+        assert_eq!(
+            rare_move_with_link.to_string(),
+            " 62... Nf8e6# ,DD 2 ,https://lichess.org/123"
+        );
         Ok(())
     }
 }

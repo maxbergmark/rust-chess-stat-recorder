@@ -107,23 +107,37 @@ pub fn to_game_stream(
     Ok(zstd::Decoder::new(bridge).map(BufferedReader::new)?)
 }
 
-pub fn get_output_file(input_file: &str) -> std::result::Result<File, std::io::Error> {
-    let raw_filename = input_file
+fn raw_file_name(input_file: &str) -> Result<&str> {
+    Ok(input_file
         .split('/')
         .last()
         .and_then(|s| s.split('.').next())
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No filename found"))?;
-    let filename = format!("./output/{raw_filename}.bin");
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No filename found"))?)
+}
 
-    if std::path::Path::new(&filename).exists() {
+fn open_or_create_file(filename: &str) -> Result<File> {
+    let result = if std::path::Path::new(filename).exists() {
         OpenOptions::new()
             .write(true)
             .truncate(true)
             .append(false)
-            .open(&filename)
+            .open(filename)
     } else {
-        File::create(&filename)
-    }
+        File::create(filename)
+    };
+    Ok(result?)
+}
+
+pub fn get_data_output_file(input_file: &str) -> Result<File> {
+    let raw_filename = raw_file_name(input_file)?;
+    let filename = format!("./output/{raw_filename}.bin");
+    open_or_create_file(&filename)
+}
+
+pub fn get_move_output_file(input_file: &str) -> Result<File> {
+    let raw_filename = raw_file_name(input_file)?;
+    let filename = format!("./output/{raw_filename}.moves");
+    open_or_create_file(&filename)
 }
 
 #[cfg(test)]

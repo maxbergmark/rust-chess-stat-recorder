@@ -1,10 +1,73 @@
-#[derive(Debug, Clone)]
+use std::fmt::Display;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MoveType {
-    #[allow(unused)]
-    EnPassantMate,
-    DoubleDisambiguationCheckmate,
-    DoubleDisambiguationCaptureCheckmate,
+    KingCheckmate {
+        was_played: bool,
+        is_capture: bool,
+    },
+    DoubleDisambiguationCheckmate {
+        was_played: bool,
+        is_capture: bool,
+        checkmate_type: CheckType,
+    },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckType {
+    Normal,
+    Discovered,
+    Double,
+}
+
+impl MoveType {
+    fn format_king_checkmate(is_capture: bool, was_played: bool) -> String {
+        format!(
+            "K {} {}",
+            if is_capture { 'x' } else { ' ' },
+            if was_played { ' ' } else { '?' },
+        )
+    }
+
+    fn format_double_disambiguation_checkmate(
+        is_capture: bool,
+        was_played: bool,
+        checkmate_type: &CheckType,
+    ) -> String {
+        format!(
+            "DD{}{}{}",
+            if is_capture { 'x' } else { ' ' },
+            match checkmate_type {
+                CheckType::Normal => ' ',
+                CheckType::Discovered => 'D',
+                CheckType::Double => '2',
+            },
+            if was_played { ' ' } else { '?' },
+        )
+    }
+}
+
+impl Display for MoveType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::KingCheckmate {
+                is_capture,
+                was_played,
+            } => Self::format_king_checkmate(*is_capture, *was_played),
+            Self::DoubleDisambiguationCheckmate {
+                is_capture,
+                was_played,
+                checkmate_type,
+            } => Self::format_double_disambiguation_checkmate(
+                *is_capture,
+                *was_played,
+                checkmate_type,
+            ),
+        };
+        write!(f, "{s}")
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Default)]
 #[repr(u8)]
 pub enum GameResult {

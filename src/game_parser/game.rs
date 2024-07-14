@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::{Error, Result};
 use shakmaty::san::{San, SanError};
 use shakmaty::{Chess, Position};
 
@@ -13,7 +13,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn validate(mut self) -> Result<GameData, Error> {
+    pub fn validate(mut self) -> Result<GameData> {
         let mut position = Chess::default();
         self.sans
             .iter()
@@ -28,7 +28,7 @@ impl Game {
         game_data: &mut GameData,
         ply: usize,
         san: &San,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let m = san
             .to_move(position)
             .map_err(|err| to_error(game_data, san, err))?;

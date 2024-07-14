@@ -1,10 +1,10 @@
 use pgn_reader::San;
-use shakmaty::{Chess, Move, Position};
+use shakmaty::{Chess, Move, Position, Role};
 use std::cmp::min;
 
 use crate::{util::is_double_disambiguation, Error};
 
-use super::enums::MoveType;
+use super::enums::{CheckType, MoveType};
 
 #[derive(Debug, Clone, Default)]
 #[repr(C)]
@@ -22,12 +22,11 @@ pub struct GamePlayerData {
     pub rare_checkmates: Vec<RareMove>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RareMove {
     pub san: String,
+    pub ply: u16,
     pub move_type: MoveType,
-    // pub is_double_disambiguation: bool,
-    // pub is_capture: bool,
 }
 
 impl GamePlayerData {
@@ -35,12 +34,13 @@ impl GamePlayerData {
         &mut self,
         mut position: Chess,
         possible_move: &Move,
+        ply: usize,
         is_winner: bool,
         is_checkmate: bool,
     ) {
-        // let san = San::from_move(&position, possible_move);
         let board_copy = position.clone();
         position.play_unchecked(possible_move);
+
         if position.is_checkmate() {
             self.missed_mates += !u16::from(is_checkmate);
             self.missed_wins += !u16::from(is_winner);
@@ -48,7 +48,9 @@ impl GamePlayerData {
                 self.missed_en_passant_mates += 1;
             }
 
-            self.check_double_disambiguation(&board_copy, possible_move);
+            if let Some(rare_move) = Self::check_rare_move(board_copy, possible_move, ply, false) {
+                self.rare_checkmates.push(rare_move);
+            }
         }
     }
 
@@ -58,26 +60,54 @@ impl GamePlayerData {
         }
     }
 
-    pub fn check_double_disambiguation(&mut self, position: &Chess, possible_move: &Move) {
-        if Self::is_interesting_move(possible_move) {
-            let san = San::from_move(position, possible_move);
+    pub fn check_rare_move(
+        position: Chess,
+        m: &Move,
+        ply: usize,
+        was_played: bool,
+    ) -> Option<RareMove> {
+        if Self::is_interesting_move(m) {
+            let san = San::from_move(&position, m);
             if is_double_disambiguation(&san) {
-                self.rare_checkmates.push(RareMove {
+                Some(RareMove {
                     san: san.to_string(),
-                    move_type: if possible_move.is_capture() {
-                        MoveType::DoubleDisambiguationCaptureCheckmate
-                    } else {
-                        MoveType::DoubleDisambiguationCheckmate
+                    ply: ply as u16,
+                    move_type: MoveType::DoubleDisambiguationCheckmate {
+                        is_capture: m.is_capture(),
+                        was_played,
+                        checkmate_type: Self::is_discovered_check(position, m),
                     },
-                    // is_double_disambiguation: true,
-                    // is_capture: possible_move.is_capture(),
-                });
+                })
+            } else if m.role() == Role::King {
+                Some(RareMove {
+                    san: san.to_string(),
+                    ply: ply as u16,
+                    move_type: MoveType::KingCheckmate {
+                        is_capture: m.is_capture(),
+                        was_played,
+                    },
+                })
+            } else {
+                None
             }
+        } else {
+            None
+        }
+    }
+
+    fn is_discovered_check(mut position: Chess, m: &Move) -> CheckType {
+        let sq = m.to();
+        position.play_unchecked(m);
+        let checkers = position.checkers();
+        match (checkers.contains(sq), checkers.count() > 1) {
+            (true, true) => CheckType::Double,
+            (true, false) => CheckType::Normal,
+            (false, _) => CheckType::Discovered,
         }
     }
 
     fn is_interesting_move(m: &Move) -> bool {
-        m.role() == shakmaty::Role::Bishop || m.role() == shakmaty::Role::Knight
+        m.role() == Role::Bishop || m.role() == Role::Knight || m.role() == Role::King
     }
 
     pub fn set_elo(&mut self, value: &[u8]) {
@@ -90,5 +120,118 @@ impl GamePlayerData {
     pub fn set_name(&mut self, value: &[u8]) {
         let l = min(value.len(), 20);
         self.name[..l].clone_from_slice(&value[..l]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    use pgn_reader::SanPlus;
+    use shakmaty::{fen::Fen, san::San, CastlingMode, Chess};
+
+    type Error = Box<dyn std::error::Error>;
+    type Result<T> = std::result::Result<T, Error>;
+
+    #[test]
+    fn test_is_double_disambiguation() {
+        let san = San::Normal {
+            role: Role::Pawn,
+            file: Some(shakmaty::File::A),
+            rank: Some(shakmaty::Rank::First),
+            capture: false,
+            to: shakmaty::Square::A2,
+            promotion: None,
+        };
+        assert!(is_double_disambiguation(&san));
+    }
+
+    #[test]
+    fn test_parse_is_double_disambiguation() -> Result<()> {
+        let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Nf8e6#")?;
+        let m = san.to_move(&position)?;
+        let san_plus = SanPlus::from_move(position, &m);
+        let is_double_disambiguation = is_double_disambiguation(&san_plus.san);
+
+        assert!(is_double_disambiguation);
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_discovered_mate() -> Result<()> {
+        let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Nf8e6#")?;
+        let m = san.to_move(&position)?;
+        let check_type = GamePlayerData::is_discovered_check(position, &m);
+
+        assert_eq!(check_type, CheckType::Discovered);
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_not_discovered_mate() -> Result<()> {
+        let fen: Fen = "3NQN1k/4N1Np/7B/5B1R/7P/8/8/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Nf7#")?;
+        let m = san.to_move(&position)?;
+        let check_type = GamePlayerData::is_discovered_check(position, &m);
+
+        assert_eq!(check_type, CheckType::Normal);
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_discovered_double_mate() -> Result<()> {
+        let fen: Fen = "3NQN1k/7p/4N2B/3N3R/7P/8/6B1/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Ng6#")?;
+        let m = san.to_move(&position)?;
+        let check_type = GamePlayerData::is_discovered_check(position, &m);
+
+        assert_eq!(check_type, CheckType::Double);
+        Ok(())
+    }
+
+    #[test]
+    fn test_is_normal_double_disambiguation_mate() -> Result<()> {
+        let fen: Fen = "1k6/2N1N3/1K6/NNN1N3/8/8/8/8 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Ne5c6#")?;
+        let m = san.to_move(&position)?;
+        let check_type = GamePlayerData::is_discovered_check(position, &m);
+
+        assert_eq!(check_type, CheckType::Normal);
+        Ok(())
+    }
+
+    #[test]
+    fn test_check_rare_move() -> Result<()> {
+        let fen: Fen = "1k6/2N1N3/1K6/NNN1N3/8/8/8/8 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str(&"Ne5c6#")?;
+        let m = san.to_move(&position)?;
+        let rare_move = GamePlayerData::check_rare_move(position, &m, 123, true);
+        let expected = RareMove {
+            san: "Ne5c6".to_string(),
+            ply: 123,
+            move_type: MoveType::DoubleDisambiguationCheckmate {
+                was_played: true,
+                is_capture: false,
+                checkmate_type: CheckType::Normal,
+            },
+        };
+
+        assert_eq!(rare_move, Some(expected));
+        Ok(())
     }
 }

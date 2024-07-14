@@ -11,18 +11,16 @@ pub struct Config {
     pub rerun_ip: [u8; 4],
     pub port: Option<u16>,
     pub years: HashSet<u32>,
-    pub output_data: bool,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[serde(alias = "update_interval_seconds")]
     pub update_interval: Duration,
-    pub logs: Logs,
+    pub output: Output,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Logs {
-    pub en_passant_mates: bool,
-    pub double_disambiguation_checkmates: bool,
-    pub double_disambiguation_capture_checkmates: bool,
+pub struct Output {
+    pub rare_moves: bool,
+    pub data: bool,
 }
 
 impl Config {
@@ -42,14 +40,17 @@ mod tests {
             r#"
 rerun_ip = [127, 0, 0, 1]
 years = [2013, 2014, 2015]
-output_data = true
 update_interval_seconds = 5
 
 [logs]
 en_passant_mates = true
 double_disambiguation_checkmates = true
 double_disambiguation_capture_checkmates = true
- "#,
+
+[output]
+rare_moves = true
+data = false
+"#,
         )
         .unwrap();
 

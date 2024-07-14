@@ -15,39 +15,43 @@ use crate::{
     plotter::Plotter,
     ui::{UserInterface, UI},
     util::{
-        from_file, get_file_list, get_output_file, save_file, write_batch, AndThenErr, FileInfo,
-        Progress,
+        from_file, get_data_output_file, get_file_list, get_move_output_file, save_file,
+        write_batch, write_moves, AndThenErr, FileInfo, Progress,
     },
     Result,
 };
 
-fn validate_and_log(game: Game, plotter: &Arc<Plotter>, config: &Config) -> Result<GameData> {
+fn validate_and_log(game: Game, plotter: &Arc<Plotter>) -> Result<GameData> {
     game.validate()
-        .and_then(|game_data| {
-            Plotter::add_samples(&game_data, plotter, config)?;
-            Ok(game_data)
+        .inspect(|game_data| {
+            Plotter::add_samples(game_data, plotter);
         })
         .and_then_err(|e| plotter.log_error(e))
 }
 
 fn parse_batch(
     chunk: impl Iterator<Item = Game>,
-    output_file: &mut File,
+    data_output_file: &mut Option<File>,
+    move_output_file: &mut Option<File>,
     plotter: &Arc<Plotter>,
-    config: &Config,
 ) -> Result<Progress> {
     let data = chunk
         .collect::<Vec<_>>()
         .into_par_iter()
-        .flat_map(|game| validate_and_log(game, plotter, config))
+        .flat_map(|game| validate_and_log(game, plotter))
         .collect::<Vec<_>>();
 
-    data.iter()
-        .flat_map(GameData::get_rare_moves)
-        .try_for_each(|rare_move| Plotter::log_rare_move(plotter, &rare_move))?;
+    let rare_moves = data.iter().flat_map(GameData::get_rare_moves).collect_vec();
 
-    if config.output_data {
-        write_batch(output_file, &data)?;
+    rare_moves
+        .iter()
+        .try_for_each(|rare_move| Plotter::log_rare_move(plotter, rare_move))?;
+
+    if let Some(data_output_file) = data_output_file {
+        write_batch(data_output_file, &data)?;
+    }
+    if let Some(move_output_file) = move_output_file {
+        write_moves(move_output_file, &rare_moves)?;
     }
     Ok(data.into())
 }
@@ -61,7 +65,18 @@ fn parse_all_games(
 ) -> Result<()> {
     let mut validator = Validator::new();
     let mut progress = Progress::default();
-    let mut output_file = get_output_file(filename)?;
+
+    let mut data_output_file = if config.output.data {
+        Some(get_data_output_file(filename)?)
+    } else {
+        None
+    };
+
+    let mut move_output_file = if config.output.rare_moves {
+        Some(get_move_output_file(filename)?)
+    } else {
+        None
+    };
 
     game_stream
         .into_iter(&mut validator)
@@ -69,7 +84,7 @@ fn parse_all_games(
         .chunks(10000)
         .into_iter()
         .try_for_each(|chunk| {
-            progress += parse_batch(chunk, &mut output_file, plotter, config)?;
+            progress += parse_batch(chunk, &mut data_output_file, &mut move_output_file, plotter)?;
             UI::update_progress(ui, filename, progress)?;
             plotter.update()
         })

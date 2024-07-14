@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     config::Config,
-    game_parser::{GameData, GamePlayerData, MoveType, RareMoveWithLink},
+    game_parser::{GameData, GamePlayerData, RareMoveWithLink},
     Error, Result,
 };
 
@@ -29,7 +29,7 @@ impl Plotter {
     fn from_config(config: &Config) -> Result<Self> {
         let port = config.port.unwrap_or(9876);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(config.rerun_ip)), port);
-        let rec = rerun::RecordingStreamBuilder::new("chess_analysis_2013-2020")
+        let rec = rerun::RecordingStreamBuilder::new("chess_analysis")
             .connect_opts(addr, Some(Duration::from_secs(1)))?;
         // .spawn()?;
 
@@ -57,51 +57,14 @@ impl Plotter {
         );
     }
 
-    pub fn add_samples(game_data: &GameData, plotter: &Self, config: &Config) -> Result<()> {
+    pub fn add_samples(game_data: &GameData, plotter: &Self) {
         Self::add_player_samples(&game_data.white_player, plotter);
         Self::add_player_samples(&game_data.black_player, plotter);
         Self::add_sample(&plotter.half_moves_hist, game_data.half_moves as i16);
-
-        if config.logs.en_passant_mates && game_data.is_en_passant_mate() {
-            plotter.info(
-                &format!("En passant mate: {}", game_data.get_formatted_game_link()?),
-                None,
-            )?;
-        }
-
-        if config.logs.double_disambiguation_checkmates
-            && game_data.has_double_disambiguation_checkmate()
-        {
-            plotter.info(
-                &format!("DD checkmate: {}", game_data.get_formatted_game_link()?),
-                None,
-            )?;
-        }
-
-        if config.logs.double_disambiguation_capture_checkmates
-            && game_data.has_double_disambiguation_capture_checkmate()
-        {
-            plotter.info(
-                &format!(
-                    "DD capture checkmate: {}",
-                    game_data.get_formatted_game_link()?
-                ),
-                None,
-            )?;
-        }
-        Ok(())
     }
 
     pub fn log_rare_move(plotter: &Self, rare_move: &RareMoveWithLink) -> Result<()> {
-        let move_type = match rare_move.move_type {
-            MoveType::EnPassantMate => "EP ",
-            MoveType::DoubleDisambiguationCheckmate => "DD ",
-            MoveType::DoubleDisambiguationCaptureCheckmate => "DDx",
-        };
-        let message = format!(
-            "Rare move: ({:6} {} {})",
-            rare_move.san, move_type, rare_move.game_link
-        );
+        let message = rare_move.to_string();
         plotter.info(&message, None)?;
         Ok(())
     }

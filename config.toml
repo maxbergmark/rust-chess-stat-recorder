@@ -1,9 +1,12 @@
 rerun_ip = [192, 168, 10, 135]
-years = [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]
-output_data = false
+years = [2020]
 update_interval_seconds = 5
 
 [logs]
 en_passant_mates = false
 double_disambiguation_checkmates = true
 double_disambiguation_capture_checkmates = true
+
+[output]
+rare_moves = true
+data = false
