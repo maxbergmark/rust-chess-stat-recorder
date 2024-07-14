@@ -1,11 +1,6 @@
 rerun_ip = [192, 168, 10, 135]
-years = [2020]
-update_interval_seconds = 5
-
-[logs]
-en_passant_mates = false
-double_disambiguation_checkmates = true
-double_disambiguation_capture_checkmates = true
+years = [2013, 2014, 2015]
+update_interval_seconds = 20
 
 [output]
 rare_moves = true
