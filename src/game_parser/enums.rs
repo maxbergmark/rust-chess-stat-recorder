@@ -78,7 +78,7 @@ pub enum GameResult {
     Unfinished = 4,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Termination {
     Normal = 1,
@@ -89,7 +89,7 @@ pub enum Termination {
     RulesInfraction = 5,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TimeControl {
     CorrespondenceGame = 1,

@@ -5,7 +5,7 @@ use shakmaty::{Chess, Position};
 use super::enums::GameResult;
 use super::GameData;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Game {
     pub sans: Vec<San>,
     pub success: bool,
@@ -18,12 +18,12 @@ impl Game {
         self.sans
             .iter()
             .enumerate()
-            .try_for_each(|(ply, san)| Self::parse_move(&mut position, &mut self.data, ply, san))?;
+            .try_for_each(|(ply, san)| Self::check_move(&mut position, &mut self.data, ply, san))?;
         self.data.half_moves = self.sans.len() as u16;
         Ok(self.data)
     }
 
-    fn parse_move(
+    fn check_move(
         position: &mut Chess,
         game_data: &mut GameData,
         ply: usize,
@@ -55,5 +55,32 @@ fn to_error(game_data: &GameData, san: &San, err: SanError) -> Error {
             Error::InvalidMove(err, message)
         }
         Err(e) => e,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::panic_in_result_fn)]
+mod tests {
+    extern crate test;
+
+    use super::*;
+
+    type Error = Box<dyn std::error::Error>;
+
+    #[bench]
+    fn bench_check_move(b: &mut test::Bencher) {
+        b.iter(|| {
+            let mut game_data = GameData::default();
+            let position = Chess::default();
+            // game has average of 60 moves, 20 legal moves in starting position
+            for _ in 0..3 {
+                for m in position.legal_moves() {
+                    let san = San::from_move(&position, &m);
+                    let mut board_copy = position.clone();
+                    Game::check_move(&mut board_copy, &mut game_data, 0, &san)?;
+                }
+            }
+            Ok::<(), Error>(())
+        });
     }
 }

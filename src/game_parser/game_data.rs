@@ -11,7 +11,7 @@ use super::{
     GamePlayerData, MoveType,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct GameData {
     pub white_player: GamePlayerData,
@@ -25,6 +25,7 @@ pub struct GameData {
     pub half_moves: u16,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RareMoveWithLink {
     pub game_link: String,
     pub san: String,
@@ -237,15 +238,12 @@ impl GameData {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+    use super::*;
     use crate::game_parser::enums::CheckType;
 
-    use super::*;
-
-    type Error = Box<dyn std::error::Error>;
-    type Result<T> = std::result::Result<T, Error>;
-
     #[test]
-    fn test_display_rare_move() -> Result<()> {
+    fn test_display_rare_move() {
         let game_link = "https://lichess.org/123".to_string();
         let rare_move = RareMove {
             san: "Nf8e6".to_string(),
@@ -261,11 +259,10 @@ mod tests {
             rare_move_with_link.to_string(),
             "  6.   Nf8e6# ,DD 2 ,https://lichess.org/123"
         );
-        Ok(())
     }
 
     #[test]
-    fn test_display_rare_move_odd_ply() -> Result<()> {
+    fn test_display_rare_move_odd_ply() {
         let game_link = "https://lichess.org/123".to_string();
         let rare_move = RareMove {
             san: "Nf8e6".to_string(),
@@ -281,6 +278,33 @@ mod tests {
             rare_move_with_link.to_string(),
             " 62... Nf8e6# ,DD 2 ,https://lichess.org/123"
         );
-        Ok(())
+    }
+
+    #[bench]
+    fn bench_analyze_position(b: &mut test::Bencher) {
+        b.iter(|| {
+            let mut game_data = GameData::default();
+            let position = Chess::default();
+            // game has average of 60 moves, 20 legal moves in starting position
+            for _ in 0..3 {
+                for m in position.legal_moves() {
+                    game_data.analyze_position(&position, 0, &m, false);
+                }
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_check_other_moves(b: &mut test::Bencher) {
+        b.iter(|| {
+            let mut game_data = GameData::default();
+            let position = Chess::default();
+            // game has average of 60 moves, 20 legal moves in starting position
+            for _ in 0..3 {
+                for m in position.legal_moves() {
+                    game_data.check_other_moves(&position, 0, &m, false, false);
+                }
+            }
+        });
     }
 }

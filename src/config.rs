@@ -6,7 +6,7 @@ use serde_with::serde_as;
 use crate::Result;
 
 #[serde_with::serde_as]
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub rerun_ip: [u8; 4],
     pub port: Option<u16>,
@@ -17,7 +17,7 @@ pub struct Config {
     pub output: Output,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Output {
     pub rare_moves: bool,
     pub data: bool,
@@ -34,10 +34,10 @@ impl Config {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_config() {
-        let config: Config = toml::from_str(
-            r#"
+    type Error = Box<dyn std::error::Error>;
+    type Result<T> = std::result::Result<T, Error>;
+
+    const TEST_CONFIG: &str = r"
 rerun_ip = [127, 0, 0, 1]
 years = [2013, 2014, 2015]
 update_interval_seconds = 5
@@ -50,14 +50,24 @@ double_disambiguation_capture_checkmates = true
 [output]
 rare_moves = true
 data = false
-"#,
-        )
-        .unwrap();
+";
 
-        assert_eq!(config.rerun_ip, [127, 0, 0, 1]);
-        assert_eq!(config.port, None);
-        assert_eq!(config.years.len(), 3);
-        assert_eq!(config.years, [2013, 2014, 2015].into());
-        assert_eq!(config.update_interval, Duration::from_secs(5));
+    #[test]
+    #[allow(clippy::panic_in_result_fn)]
+    fn test_config() -> Result<()> {
+        let config: Config = toml::from_str(TEST_CONFIG)?;
+        let expected = Config {
+            rerun_ip: [127, 0, 0, 1],
+            port: None,
+            years: [2013, 2014, 2015].iter().copied().collect(),
+            update_interval: Duration::from_secs(5),
+            output: Output {
+                rare_moves: true,
+                data: false,
+            },
+        };
+
+        assert_eq!(config, expected);
+        Ok(())
     }
 }

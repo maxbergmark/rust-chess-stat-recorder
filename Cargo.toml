@@ -10,31 +10,34 @@ lto = "thin"
 
 [package]
 name = "rust-chess-stat-recorder"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 atomic-time = "0.1.5"
-backoff = {version = "0.4.0", features = ["tokio"]}
-# amiquip = "0.4.2"
+backoff = { version = "0.4.0", features = ["tokio"] }
 chrono = "0.4.23"
-derive_more = {version = "0.99.18", features = ["from"]}
-# core_affinity = "0.8.0"
-# crossbeam = "0.8.2"
+derive_more = { version = "0.99.18", features = ["from"] }
 futures = "0.3.30"
 itertools = "0.13.0"
 pgn-reader = "0.26.0"
 ratatui = "0.27.0"
 rayon = "1.6.1"
-reqwest = { version = "0.12.5", features = ["blocking", "json", "stream", "zstd"] }
+reqwest = { version = "0.12.5", features = [
+    "blocking",
+    "json",
+    "stream",
+    "zstd",
+] }
 rerun = "0.16.1"
+rstest = "0.21.0"
 serde = "1.0.204"
 serde_with = "3.8.3"
 shakmaty = "0.27.1"
 tokio = { version = "1.38.0", features = ["full"] }
-tokio-util = { version = "0.7.11", features = ["io-util"]}
+tokio-util = { version = "0.7.11", features = ["io-util"] }
 toml = "0.8.14"
 zstd = "0.12.3"
 
@@ -127,7 +130,6 @@ match_same_arms = "warn"
 match_wild_err_arm = "warn"
 match_wildcard_for_single_variants = "warn"
 mem_forget = "warn"
-mismatched_target_os = "warn"
 missing_enforced_import_renames = "warn"
 mut_mut = "warn"
 mutex_integer = "warn"

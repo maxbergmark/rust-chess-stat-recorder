@@ -141,6 +141,7 @@ pub fn get_move_output_file(input_file: &str) -> Result<File> {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic_in_result_fn)]
 mod tests {
     use std::str::FromStr;
 
@@ -168,7 +169,7 @@ mod tests {
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
         let correct_san = "N5xf6#";
 
-        let san = San::from_str(&correct_san)?;
+        let san = San::from_str(correct_san)?;
         let m = san.to_move(&position)?;
         let san_plus = SanPlus::from_move(position, &m);
 
@@ -182,7 +183,7 @@ mod tests {
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
         let correct_san = "N4xg3#";
 
-        let san = San::from_str(&correct_san)?;
+        let san = San::from_str(correct_san)?;
         let m = san.to_move(&position)?;
         let san_plus = SanPlus::from_move(position, &m);
 

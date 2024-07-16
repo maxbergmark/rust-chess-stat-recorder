@@ -51,20 +51,23 @@ pub fn to_human(value: f64) -> String {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[test]
-    fn test_to_human() {
-        assert_eq!(to_human(0.0), "0.000");
-        assert_eq!(to_human(1.0), "1.000");
-        assert_eq!(to_human(10.0), "10.00");
-        assert_eq!(to_human(999.0), "999.0");
-        assert_eq!(to_human(1_000.0), "1.000k");
-        assert_eq!(to_human(10_000.0), "10.00k");
-        assert_eq!(to_human(100_000.0), "100.0k");
-        assert_eq!(to_human(1_000_000.0), "1.000M");
-        assert_eq!(to_human(1_000_000_000.0), "1.000G");
-        assert_eq!(to_human(1_000_000_000_000.0), "1.000T");
-        assert_eq!(to_human(1_000_000_000_000_000.0), "1000.0T");
+    #[rstest]
+    #[case(0.0, "0.000")]
+    #[case(1.0, "1.000")]
+    #[case(10.0, "10.00")]
+    #[case(999.0, "999.0")]
+    #[case(1_000.0, "1.000k")]
+    #[case(10_000.0, "10.00k")]
+    #[case(100_000.0, "100.0k")]
+    #[case(1_000_000.0, "1.000M")]
+    #[case(1_000_000_000.0, "1.000G")]
+    #[case(1_000_000_000_000.0, "1.000T")]
+    #[case(1_000_000_000_000_000.0, "1000.0T")]
+    fn test_to_human(#[case] value: f64, #[case] expected: &str) {
+        assert_eq!(to_human(value), expected);
     }
 }

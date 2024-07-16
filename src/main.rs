@@ -1,7 +1,9 @@
+#![feature(test)]
 #![warn(
     // missing_docs,
     // unreachable_pub,
     keyword_idents,
+    unexpected_cfgs,
     missing_copy_implementations,
     missing_debug_implementations,
     non_ascii_idents,
@@ -26,6 +28,8 @@
     unused_parens,
     while_true,
 )]
+
+use rstest as _;
 
 mod config;
 mod error;

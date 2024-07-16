@@ -6,7 +6,7 @@ use crate::{util::is_double_disambiguation, Error};
 
 use super::enums::{CheckType, MoveType};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[repr(C)]
 pub struct GamePlayerData {
     pub name: [u8; 20],
@@ -42,8 +42,8 @@ impl GamePlayerData {
         position.play_unchecked(possible_move);
 
         if position.is_checkmate() {
-            self.missed_mates += !u16::from(is_checkmate);
-            self.missed_wins += !u16::from(is_winner);
+            self.missed_mates += u16::from(!is_checkmate);
+            self.missed_wins += u16::from(!is_winner);
             if possible_move.is_en_passant() {
                 self.missed_en_passant_mates += 1;
             }
@@ -78,12 +78,12 @@ impl GamePlayerData {
                         checkmate_type: Self::is_discovered_check(position, m),
                     },
                 })
-            } else if m.role() == Role::King {
+            } else if m.role() == Role::King && m.is_capture() {
                 Some(RareMove {
                     san: san.to_string(),
                     ply: ply as u16,
                     move_type: MoveType::KingCheckmate {
-                        is_capture: m.is_capture(),
+                        is_capture: true,
                         was_played,
                     },
                 })
@@ -124,7 +124,9 @@ impl GamePlayerData {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic_in_result_fn)]
 mod tests {
+    extern crate test;
     use std::str::FromStr;
 
     use super::*;
@@ -152,7 +154,7 @@ mod tests {
         let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Nf8e6#")?;
+        let san = San::from_str("Nf8e6#")?;
         let m = san.to_move(&position)?;
         let san_plus = SanPlus::from_move(position, &m);
         let is_double_disambiguation = is_double_disambiguation(&san_plus.san);
@@ -166,7 +168,7 @@ mod tests {
         let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Nf8e6#")?;
+        let san = San::from_str("Nf8e6#")?;
         let m = san.to_move(&position)?;
         let check_type = GamePlayerData::is_discovered_check(position, &m);
 
@@ -179,7 +181,7 @@ mod tests {
         let fen: Fen = "3NQN1k/4N1Np/7B/5B1R/7P/8/8/6K1 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Nf7#")?;
+        let san = San::from_str("Nf7#")?;
         let m = san.to_move(&position)?;
         let check_type = GamePlayerData::is_discovered_check(position, &m);
 
@@ -192,7 +194,7 @@ mod tests {
         let fen: Fen = "3NQN1k/7p/4N2B/3N3R/7P/8/6B1/6K1 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Ng6#")?;
+        let san = San::from_str("Ng6#")?;
         let m = san.to_move(&position)?;
         let check_type = GamePlayerData::is_discovered_check(position, &m);
 
@@ -205,7 +207,7 @@ mod tests {
         let fen: Fen = "1k6/2N1N3/1K6/NNN1N3/8/8/8/8 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Ne5c6#")?;
+        let san = San::from_str("Ne5c6#")?;
         let m = san.to_move(&position)?;
         let check_type = GamePlayerData::is_discovered_check(position, &m);
 
@@ -218,7 +220,7 @@ mod tests {
         let fen: Fen = "1k6/2N1N3/1K6/NNN1N3/8/8/8/8 w - -".parse()?;
         let position: Chess = fen.into_position(CastlingMode::Standard)?;
 
-        let san = San::from_str(&"Ne5c6#")?;
+        let san = San::from_str("Ne5c6#")?;
         let m = san.to_move(&position)?;
         let rare_move = GamePlayerData::check_rare_move(position, &m, 123, true);
         let expected = RareMove {
@@ -232,6 +234,100 @@ mod tests {
         };
 
         assert_eq!(rare_move, Some(expected));
+        Ok(())
+    }
+
+    #[bench]
+    fn bench_check_other_move(b: &mut test::Bencher) {
+        b.iter(|| {
+            let mut game_player_data = GamePlayerData::default();
+            let position = Chess::default();
+            // game has average of 2000 move variations, 20 legal moves in starting position
+            for _ in 0..100 {
+                for m in position.legal_moves() {
+                    game_player_data.check_other_move(position.clone(), &m, 0, false, false);
+                }
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_check_rare_move(b: &mut test::Bencher) {
+        b.iter(|| {
+            let position = Chess::default();
+            // game has average of 2000 move variations, 20 legal moves in starting position
+            for _ in 0..100 {
+                for m in position.legal_moves() {
+                    GamePlayerData::check_rare_move(position.clone(), &m, 0, false);
+                }
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_check_rare_move_single_none(b: &mut test::Bencher) {
+        let position = Chess::default();
+        let m = position.legal_moves()[0].clone();
+        b.iter(|| {
+            GamePlayerData::check_rare_move(position.clone(), &m, 0, false);
+        });
+    }
+
+    #[bench]
+    fn bench_check_rare_move_single_knight(b: &mut test::Bencher) -> Result<()> {
+        let position = Chess::default();
+
+        let san = San::from_str("Nc3")?;
+        let m = san.to_move(&position)?;
+
+        b.iter(|| {
+            GamePlayerData::check_rare_move(position.clone(), &m, 0, false);
+        });
+        Ok(())
+    }
+
+    #[bench]
+    fn bench_check_rare_move_single_some(b: &mut test::Bencher) -> Result<()> {
+        let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str("Nf8e6#")?;
+        let m = san.to_move(&position)?;
+
+        b.iter(|| {
+            GamePlayerData::check_rare_move(position.clone(), &m, 0, false);
+        });
+        Ok(())
+    }
+
+    #[bench]
+    fn bench_copy_board(b: &mut test::Bencher) -> Result<()> {
+        let fen: Fen = "8/2KN1p2/5p2/3N1B1k/5PNp/7P/7P/8 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        b.iter(|| position.clone());
+        Ok(())
+    }
+
+    #[bench]
+    fn bench_parse_san(b: &mut test::Bencher) -> Result<()> {
+        let position = Chess::default();
+
+        let san = San::from_str("Nc3")?;
+        let m = san.to_move(&position)?;
+
+        b.iter(|| San::from_move(&position, &m));
+        Ok(())
+    }
+    #[bench]
+    fn bench_parse_san_double_disambiguation(b: &mut test::Bencher) -> Result<()> {
+        let fen: Fen = "N2NQN1k/7p/7B/7R/5N2/7P/6B1/6K1 w - -".parse()?;
+        let position: Chess = fen.into_position(CastlingMode::Standard)?;
+
+        let san = San::from_str("Nf8e6#")?;
+        let m = san.to_move(&position)?;
+
+        b.iter(|| San::from_move(&position, &m));
         Ok(())
     }
 }

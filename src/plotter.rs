@@ -29,7 +29,7 @@ impl Plotter {
     fn from_config(config: &Config) -> Result<Self> {
         let port = config.port.unwrap_or(9876);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(config.rerun_ip)), port);
-        let rec = rerun::RecordingStreamBuilder::new("chess_analysis")
+        let rec = rerun::RecordingStreamBuilder::new("chess_analysis_evelyn")
             .connect_opts(addr, Some(Duration::from_secs(1)))?;
         // .spawn()?;
 
